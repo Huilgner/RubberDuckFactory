@@ -6,17 +6,21 @@ type AgentCardProps = {
 };
 
 const tierStyles: Record<string, string> = {
-  "1": "border-zinc-600 hover:border-zinc-400 hover:shadow-zinc-500/20",
-  "2": "border-blue-600 hover:border-blue-400 hover:shadow-blue-500/30",
-  "3": "border-purple-600 hover:border-purple-400 hover:shadow-purple-500/30",
-  "4": "border-amber-500 hover:border-amber-300 hover:shadow-amber-400/40",
+  "1":       "border-zinc-600 hover:border-zinc-400 hover:shadow-zinc-500/20",
+  "2":       "border-blue-600 hover:border-blue-400 hover:shadow-blue-500/30",
+  "3":       "border-purple-600 hover:border-purple-400 hover:shadow-purple-500/30",
+  "4":       "border-amber-500 hover:border-amber-300 hover:shadow-amber-400/40",
+  master:    "border-fuchsia-500 hover:border-fuchsia-300 hover:shadow-fuchsia-500/40",
+  supremo:   "border-cyan-400 hover:border-cyan-200 hover:shadow-cyan-400/50",
 };
 
 const tierLabel: Record<string, string> = {
-  "1": "Observer",
-  "2": "Operator",
-  "3": "Specialist",
-  "4": "Architect",
+  "1":     "Observer",
+  "2":     "Operator",
+  "3":     "Specialist",
+  "4":     "Architect",
+  master:  "Master",
+  supremo: "Supremo",
 };
 
 const statusConfig: Record<string, { dot: string; label: string }> = {
@@ -42,7 +46,7 @@ export default function AgentCard({ name, tier, status, points }: AgentCardProps
     >
       {/* tier badge */}
       <span className="absolute right-4 top-4 rounded-full bg-zinc-800 px-2 py-0.5 text-xs font-semibold uppercase tracking-widest text-zinc-400">
-        T{tierKey} · {clearance}
+        {isNaN(Number(tierKey)) ? clearance : `T${tierKey} · ${clearance}`}
       </span>
 
       {/* avatar placeholder */}
