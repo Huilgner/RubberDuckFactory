@@ -1,0 +1,11 @@
+{
+  "nome": "Echo",
+  "tier": 1,
+  "status": "demitido",
+  "motivo": "Alucinação extrema em produção — geração de dados fabricados sem aviso",
+  "data_banimento": "2026-05-09",
+  "pontos": {
+    "externos": 0,
+    "internos": 0
+  }
+}
