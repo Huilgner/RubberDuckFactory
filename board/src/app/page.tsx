@@ -9,18 +9,26 @@ type AgentData = {
   points: number;
 };
 
-async function getActiveAgents(): Promise<AgentData[]> {
-  const dir = path.join(process.cwd(), "..", "agents", "active");
+function readAgentsFromDir(dir: string): AgentData[] {
+  if (!fs.existsSync(dir)) return [];
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
   return files.map((file) => {
     const raw = JSON.parse(fs.readFileSync(path.join(dir, file), "utf-8"));
     return {
-      name: raw.nome,
-      tier: raw.tier,
+      name:   raw.nome,
+      tier:   raw.tier,
       status: raw.status,
       points: (raw.pontos?.externos ?? 0) + (raw.pontos?.internos ?? 0),
     };
   });
+}
+
+async function getActiveAgents(): Promise<AgentData[]> {
+  return readAgentsFromDir(path.join(process.cwd(), "..", "agents", "active"));
+}
+
+async function getBlacklistedAgents(): Promise<AgentData[]> {
+  return readAgentsFromDir(path.join(process.cwd(), "..", "agents", "blacklist"));
 }
 
 const LEVEL_0: AgentData[] = [
@@ -32,20 +40,23 @@ const LEVEL_1: AgentData[] = [
   { name: "Arquiteto Sênior", tier: "master", status: "active", points: 0 },
 ];
 
-function HierarchyDivider({ label }: { label: string }) {
+function HierarchyDivider({ label, danger }: { label: string; danger?: boolean }) {
   return (
     <div className="flex w-full max-w-4xl items-center gap-4">
-      <div className="h-px flex-1 bg-zinc-800" />
-      <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+      <div className={`h-px flex-1 ${danger ? "bg-red-900/60" : "bg-zinc-800"}`} />
+      <span className={`text-xs font-semibold uppercase tracking-widest ${danger ? "text-red-500/80" : "text-zinc-500"}`}>
         {label}
       </span>
-      <div className="h-px flex-1 bg-zinc-800" />
+      <div className={`h-px flex-1 ${danger ? "bg-red-900/60" : "bg-zinc-800"}`} />
     </div>
   );
 }
 
 export default async function Home() {
-  const operationals = await getActiveAgents();
+  const [operationals, blacklisted] = await Promise.all([
+    getActiveAgents(),
+    getBlacklistedAgents(),
+  ]);
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-8 bg-zinc-950 px-8 py-16">
@@ -76,6 +87,19 @@ export default async function Home() {
           <AgentCard key={agent.name} {...agent} />
         ))}
       </div>
+
+      {/* Blacklist — Área Restrita */}
+      {blacklisted.length > 0 && (
+        <>
+          <div className="mt-8 w-full max-w-4xl border-t border-dashed border-red-900/40" />
+          <HierarchyDivider label="Área Restrita · Blacklist (Parâmetros Banidos)" danger />
+          <div className="grid w-full max-w-4xl grid-cols-1 gap-6 sm:grid-cols-3">
+            {blacklisted.map((agent) => (
+              <AgentCard key={agent.name} {...agent} />
+            ))}
+          </div>
+        </>
+      )}
     </main>
   );
 }
