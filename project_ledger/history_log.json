@@ -1,0 +1,16 @@
+[
+  {
+    "id": "PRJ-001",
+    "nome": "Setup Inicial do Portfólio",
+    "data": "2026-05-08",
+    "resultado": "Sucesso",
+    "agentes_envolvidos": ["Arquiteto", "Shadow"]
+  },
+  {
+    "id": "PRJ-002",
+    "nome": "Expansão e Responsividade UI/UX",
+    "data": "2026-05-08",
+    "resultado": "Sucesso",
+    "agentes_envolvidos": ["Arquiteto", "Shadow", "Nova", "Falcon"]
+  }
+]
