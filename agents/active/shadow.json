@@ -1,0 +1,9 @@
+{
+  "nome": "Shadow",
+  "tier": 1,
+  "status": "active",
+  "pontos": {
+    "externos": 0,
+    "internos": 0
+  }
+}
