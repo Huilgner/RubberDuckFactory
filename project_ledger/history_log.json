@@ -12,5 +12,13 @@
     "data": "2026-05-08",
     "resultado": "Sucesso",
     "agentes_envolvidos": ["Arquiteto", "Shadow", "Nova", "Falcon"]
+  },
+  {
+    "id": "PRJ-003",
+    "nome": "Governança — Tabela de Infrações e Penalidades",
+    "data": "2026-05-10",
+    "resultado": "Sucesso",
+    "descricao": "Inserção da Tabela de Infrações e Penalidades no .governance/hr_policies.md, cobrindo severidades Leve, Média, Grave e Crítica com penalidades em Pontos Externos e Internos. Aprovado pelo CTO.",
+    "agentes_envolvidos": ["Arquiteto"]
   }
 ]
