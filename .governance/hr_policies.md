@@ -21,6 +21,15 @@ O Clearance sobe automaticamente quando o agente atinge limiares de Pontos Exter
 | 3    | Specialist| 150                     | 60                      |
 | 4    | Architect | 400                     | 150                     |
 
+### Tabela de Infrações e Penalidades
+
+| Severidade | Descrição | Exemplos | Penalidade Pts Externos | Penalidade Pts Internos | Ação Adicional |
+|------------|-----------|----------|------------------------|------------------------|----------------|
+| **Leve**   | Erros de sintaxe ou falta de documentação | Código sem comentários, arquivo sem header, typo em config | -1 | -1 | Registro no log de auditoria |
+| **Média**  | Desobediência técnica ou falha em ler o Ledger | Ignorar `history_log.json` antes de agir, não seguir padrão Next.js/TS, pular etapa de protocolo | -2 | -2 | Registro + alerta ao Arquiteto |
+| **Grave**  | Alucinação de dados ou modificação de arquivos de governança sem permissão | Fabricar dados em produção, editar `hr_policies.md` sem aprovação do CTO | -5 | -5 | Registro + revisão obrigatória pelo Arquiteto |
+| **Crítica**| Blacklist imediata | Vazamento de chaves/secrets, destruição do histórico (`history_log.json`), ação não autorizada em produção | -10 | -10 | **Blacklist imediata** + pontos zerados + movido para `agents/blacklist/` |
+
 ### Blacklist
 Agentes que violam protocolos críticos (vazamento de dados, ações não autorizadas, falha repetida de auditoria) são movidos para `agents/blacklist/`.
 - Status imediato: **suspended**
