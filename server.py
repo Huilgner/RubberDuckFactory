@@ -173,4 +173,11 @@ def status(agent: str) -> dict:
 
 # ─── Entrypoint ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    mcp.run()
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    if transport == "http":
+        import uvicorn
+        port = int(os.environ.get("MCP_PORT", 8001))
+        app = mcp.streamable_http_app()
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    else:
+        mcp.run()

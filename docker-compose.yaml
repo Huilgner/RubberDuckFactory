@@ -32,6 +32,8 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MCP_TRANSPORT=http
+      - MCP_PORT=8001
     depends_on:
       - qdrant
 
