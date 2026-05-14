@@ -3,6 +3,11 @@ type AgentCardProps = {
   tier: number | string;
   status: string;
   points: number;
+  specialty?: string;
+  model?: string;
+  ruleset_version?: string;
+  evolution?: string;
+  success_rate?: number;
 };
 
 const tierStyles: Record<string, string> = {
@@ -33,7 +38,7 @@ const statusConfig: Record<string, { dot: string; label: string }> = {
 
 const INACTIVE_STATUSES = new Set(["demitido", "suspended", "blacklist", "inactive"]);
 
-export default function AgentCard({ name, tier, status, points }: AgentCardProps) {
+export default function AgentCard({ name, tier, status, points, specialty, model, ruleset_version, evolution, success_rate }: AgentCardProps) {
   const tierKey    = String(tier);
   const border     = tierStyles[tierKey] ?? tierStyles["1"];
   const clearance  = tierLabel[tierKey] ?? `Tier ${tier}`;
@@ -63,24 +68,73 @@ export default function AgentCard({ name, tier, status, points }: AgentCardProps
         </span>
       )}
 
-      {/* avatar */}
-      <div className={`
-        flex h-14 w-14 items-center justify-center rounded-full text-2xl font-bold ring-2
-        ${isDead
-          ? "bg-red-950/40 text-red-400/60 ring-red-900/40"
-          : "bg-zinc-800 text-zinc-300 ring-zinc-700"
-        }
-      `}>
-        {name[0].toUpperCase()}
+      {/* header: avatar + info */}
+      <div className="flex items-center gap-4">
+        <div className={`
+          flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full text-2xl font-bold ring-2
+          ${isDead
+            ? "bg-red-950/40 text-red-400/60 ring-red-900/40"
+            : "bg-zinc-800 text-zinc-300 ring-zinc-700"
+          }
+        `}>
+          {name[0].toUpperCase()}
+        </div>
+        <div className="text-left">
+          <p className="text-[10px] uppercase tracking-widest text-zinc-500">Agent ID</p>
+          <h2 className={`text-xl font-bold leading-tight ${isDead ? "text-red-400/70 line-through" : "text-zinc-100"}`}>
+            {name}
+          </h2>
+          {specialty && (
+            <p className="text-xs font-medium text-zinc-400">{specialty}</p>
+          )}
+        </div>
       </div>
 
-      {/* name */}
-      <div>
-        <p className="text-xs uppercase tracking-widest text-zinc-500">Agent ID</p>
-        <h2 className={`text-xl font-bold ${isDead ? "text-red-400/70 line-through" : "text-zinc-100"}`}>
-          {name}
-        </h2>
-      </div>
+      {/* model tag */}
+      {model && !isDead && (
+        <div className="flex flex-col gap-2 rounded-lg bg-zinc-800/40 p-3 border border-zinc-800">
+           <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                 <div className={`h-1.5 w-1.5 rounded-full ${evolution === 'Mutating' ? 'bg-amber-500 animate-pulse' : 'bg-blue-500'}`} />
+                 <span className="text-[10px] uppercase tracking-tighter text-zinc-500 font-bold">Engine:</span>
+                 <span className="text-xs font-mono text-blue-400/80">{model}</span>
+              </div>
+              {ruleset_version && (
+                <span className="text-[10px] font-mono text-zinc-600 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-700/50">
+                  {ruleset_version}
+                </span>
+              )}
+           </div>
+
+           {success_rate !== undefined && (
+             <div className="space-y-1">
+               <div className="flex justify-between text-[9px] uppercase tracking-widest text-zinc-500 font-bold">
+                 <span>Success Rate</span>
+                 <span>{success_rate}%</span>
+               </div>
+               <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                 <div 
+                   className={`h-full transition-all duration-500 ${success_rate > 90 ? 'bg-emerald-500' : success_rate > 80 ? 'bg-blue-500' : 'bg-amber-500'}`}
+                   style={{ width: `${success_rate}%` }}
+                 />
+               </div>
+             </div>
+           )}
+
+           {evolution && (
+             <div className="flex items-center gap-1.5 mt-1">
+               <span className="text-[9px] uppercase text-zinc-600 font-bold">Evolution:</span>
+               <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded-sm font-bold ${
+                 evolution === 'Stable' ? 'bg-emerald-950/30 text-emerald-500/80 border border-emerald-900/40' :
+                 evolution === 'Mutating' ? 'bg-amber-950/30 text-amber-500/80 border border-amber-900/40' :
+                 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+               }`}>
+                 {evolution}
+               </span>
+             </div>
+           )}
+        </div>
+      )}
 
       {/* points */}
       <div className={`rounded-xl px-4 py-3 text-center ${isDead ? "bg-red-950/20" : "bg-zinc-800/60"}`}>

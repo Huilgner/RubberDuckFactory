@@ -1,0 +1,35 @@
+node_modules/
+build/
+dist/
+coverage/
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.python-version
+
+# Banco vetorial (dados locais gerados em runtime)
+memory/chroma_db/
+memory/__pycache__/
+qdrant_storage/
+*.sqlite3
+*.db
+
+# Workspace temporário do freelancer
+temp_freelancer_workspace/
+
+# Logs e artefatos de build
+*.log
+.DS_Store
+.vscode/
+
+# uv / pip
+.venv/
+venv/
+*.egg-info/

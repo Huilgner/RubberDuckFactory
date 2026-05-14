@@ -1,0 +1,14 @@
+{
+  "name": "rubber-duck-factory",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "board"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=board",
+    "build": "npm run build --workspace=board",
+    "start": "npm run start --workspace=board",
+    "lint": "npm run lint --workspace=board"
+  }
+}

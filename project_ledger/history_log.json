@@ -20,5 +20,69 @@
     "resultado": "Sucesso",
     "descricao": "Inserção da Tabela de Infrações e Penalidades no .governance/hr_policies.md, cobrindo severidades Leve, Média, Grave e Crítica com penalidades em Pontos Externos e Internos. Aprovado pelo CTO.",
     "agentes_envolvidos": ["Arquiteto"]
+  },
+  {
+    "id": "PRJ-005",
+    "nome": "Configuração MCP Local do Workspace",
+    "data": "2026-05-11",
+    "resultado": "CONCLUÍDA",
+    "descricao": "Criação do arquivo .vscode/cline_mcp_settings.json no escopo local do Workspace (WSL). Configurados dois servidores MCP: 'duckduckgo' (npx duckduckgo-mcp-server) e 'fetch' (npx @modelcontextprotocol/server-fetch). Isolamento soberano: configuração local ao projeto, sem dependência do AppData global do Windows. APRENDIZADO: server-fetch apresenta travamento silencioso ao processar páginas Next.js modernas (excesso de JS/CSS inline explodindo buffer/contexto). Mitigação futura: sanitização agressiva de HTML ou uso de APIs diretas. Teste de integração validado com intervenção direta do PO via terminal.",
+    "agentes_envolvidos": ["Arquiteto"]
+  },
+  {
+    "id": "PRJ-006",
+    "nome": "Instalação da Memória Vetorial Soberana",
+    "data": "2026-05-11",
+    "resultado": "Sucesso",
+    "descricao": "Execução atômica em 3 passos: (1) uv sync --python 3.12 — dependências resolvidas (110 pacotes, 108 verificados); (2) Validação: chromadb-1.5.9 e torch-2.11.0 confirmados em .venv/lib/python3.12/site-packages/; (3) Criação de memory/memory_test.py — script de validação do ciclo completo remember→recall→forget→status para os agentes Nova, Falcon e Shadow. Módulo vector_store.py já existente foi preservado. Aprovado pelo PO.",
+    "agentes_envolvidos": ["Arquiteto"]
+  },
+  {
+    "id": "PRJ-007",
+    "nome": "Memória Vetorial — squad_knowledge: Jina AI",
+    "data": "2026-05-11",
+    "resultado": "Sucesso",
+    "descricao": "Pesquisa sobre Jina AI realizada pelo PO via curl/Jina Reader (https://r.jina.ai). Dados extraídos: jina-embeddings-v4 (3.8B params, backbone Qwen2.5-VL, multimodal, elimina modality gap), jina-reranker-m0, suite de APIs (Reader, Embeddings, Reranker, EIS). Script memory/squad_knowledge_jina.py criado e executado com CUDA_VISIBLE_DEVICES='' (GPU GTX 1050 incompatível com PyTorch instalado — CPU fallback). 6 fragmentos gravados na coleção 'squad_knowledge' do ChromaDB. Recall validado com 2 queries semânticas. Aprendizado: usar CUDA_VISIBLE_DEVICES='' para forçar CPU quando GPU é incompatível.",
+    "agentes_envolvidos": ["Arquiteto", "PO"]
+  },
+  {
+    "id": "PRJ-008",
+    "nome": "Pleno RAG Worker — Primeiro Agente Operário com RAG",
+    "data": "2026-05-11",
+    "resultado": "Sucesso",
+    "descricao": "Criação do agents/pleno_rag_worker.py: agente operário que implementa o fluxo RAG completo (Retrieval-Augmented Generation). Passo A: busca semântica na coleção squad_knowledge do ChromaDB local via sentence-transformers (CPU fallback com CUDA_VISIBLE_DEVICES=''). Passo B: monta prompt com fragmentos recuperados + pergunta e chama deepseek/deepseek-chat via OpenRouter (httpx). Teste validado com query sobre jina-embeddings-v4 — 3 fragmentos recuperados (similaridade 0.55-0.57), resposta técnica gerada com sucesso pelo DeepSeek-V3. Script aceita pergunta via CLI argument ou modo interativo.",
+    "agentes_envolvidos": ["Arquiteto"]
+  },
+  {
+    "id": "PRJ-009",
+    "nome": "Agent Runner — Revisão e Teste Hello World dos Agentes",
+    "data": "2026-05-11",
+    "resultado": "Sucesso",
+    "descricao": "Criação do agents/agent_runner.py: script de revisão operacional do Squad. Carrega dinamicamente todos os agentes ativos em agents/active/ (Falcon, Nova, Shadow), chama cada um via OpenRouter (deepseek/deepseek-chat) com instrução de auto-apresentação (nome + modelo + Hello World) e exibe as respostas. Correção aplicada: remoção do caractere em-dash (U+2014) do header X-Title para compatibilidade ASCII do httpx. Todos os 3 agentes responderam com sucesso. Uso: uv run python agents/agent_runner.py.",
+    "agentes_envolvidos": ["Arquiteto", "Falcon", "Nova", "Shadow"]
+  },
+  {
+    "id": "PRJ-010",
+    "nome": "Servidor MCP Qdrant — Memória Vetorial Soberana",
+    "data": "2026-05-12",
+    "resultado": "Sucesso",
+    "descricao": "Criação do server.py: servidor MCP (Model Context Protocol) que expõe 4 ferramentas de memória vetorial soberana via Qdrant Cloud. Ferramentas: remember (grava fragmento), recall (busca semântica), forget (remove por ID), status (contagem de vetores). Segurança: QDRANT_URL e QDRANT_API_KEY carregadas via python-dotenv a partir do .env (já no .gitignore). Dependências adicionadas via uv: qdrant-client>=1.18.0 e mcp>=1.27.1 (14 pacotes instalados). .env.example atualizado com as novas variáveis. pyproject.toml corrompido foi corrigido (lixo de terminal na linha 1 removido). Aprovado pelo CTO.",
+    "agentes_envolvidos": ["Arquiteto"]
+  },
+  {
+    "id": "PRJ-011",
+    "nome": "Lazy Loading Singleton — SentenceTransformer no server.py",
+    "data": "2026-05-12",
+    "resultado": "Sucesso",
+    "descricao": "Correção de timeout no handshake MCP via stdio. Removida a inicialização global bloqueante 'embedder = SentenceTransformer(EMBEDDING_MODEL)'. Implementado padrão Singleton com _embedder_instance e função get_embedder() que carrega o modelo apenas na primeira chamada real (remember/recall). As tools forget e status não foram alteradas (não usam embeddings). Sintaxe validada via ast.parse — zero erros. Aprovado pelo CTO.",
+    "agentes_envolvidos": ["Arquiteto"]
+  },
+  {
+    "id": "PRJ-004",
+    "nome": "Sovereign Proxy — CLI Product Owner com DeepSeek-V3",
+    "data": "2026-05-11",
+    "resultado": "Sucesso",
+    "descricao": "Criação do sovereign_proxy.py: utilitário CLI gerenciado via uv que atua como Product Owner do Squad. Integra a API do OpenRouter (modelo deepseek/deepseek-chat) para transformar demandas em linguagem natural em Briefings Técnicos padronizados com Protocolo de Orçamento (Regra 5). Arquivos criados: sovereign_proxy.py, .env, .env.example, .gitignore (raiz). Aprovado pelo CTO.",
+    "agentes_envolvidos": ["Arquiteto"]
   }
 ]
