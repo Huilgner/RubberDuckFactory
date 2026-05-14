@@ -17,6 +17,7 @@ __pycache__/
 # Banco vetorial (dados locais gerados em runtime)
 memory/chroma_db/
 memory/__pycache__/
+qdrant_storage/
 *.sqlite3
 *.db
 

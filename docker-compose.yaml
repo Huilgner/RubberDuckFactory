@@ -3,7 +3,7 @@ services:
     build:
       context: ./board
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ./agents:/agents
       - ./project_ledger:/project_ledger
