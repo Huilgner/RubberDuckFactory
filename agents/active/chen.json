@@ -1,0 +1,14 @@
+{
+  "nome": "Chen",
+  "tier": 2,
+  "specialty": "Backend Engineering",
+  "model": "deepseek-v3",
+  "ruleset_version": "BK-202",
+  "status": "active",
+  "evolution": "Stable",
+  "success_rate": 96.5,
+  "pontos": {
+    "externos": 80,
+    "internos": 45
+  }
+}
