@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "duckduckgo": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "duckduckgo-mcp-server"
+      ]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-fetch"
+      ]
+    },
+    "rubberduck-factory": {
+      "command": "/home/huilg/.local/bin/uv",
+      "args": [
+       "--directory",
+       "/mnt/c/RubberDuckFactory",
+       "run",
+       "python",
+      "server.py"
+    ],
+    "env": {
+       "PYTHONUNBUFFERED": "1"
+    }
+  }
+  }
+}
