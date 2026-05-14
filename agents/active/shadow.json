@@ -2,7 +2,7 @@
   "nome": "Shadow",
   "tier": 3,
   "specialty": "Backend & Security",
-  "model": "gemini-1.5-pro",
+  "model": "google/gemini-2.5-pro",
   "ruleset_version": "SEC-909",
   "evolution": "Stable",
   "success_rate": 94.8,

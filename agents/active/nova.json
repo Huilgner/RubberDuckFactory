@@ -2,10 +2,10 @@
   "nome": "Nova",
   "tier": 2,
   "specialty": "Frontend Development",
-  "model": "gemini-1.5-flash",
+  "model": "google/gemini-2.5-flash",
   "ruleset_version": "FE-505",
   "evolution": "Mutating",
-  "success_rate": 84.3,
+  "success_rate": 85.3,
   "status": "active",
   "pontos": {
     "externos": 50,
