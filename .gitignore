@@ -1,0 +1,16 @@
+# Secrets — nunca versionar
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+.uv/
+
+# Memória Vetorial Soberana — dados locais, não versionados
+memory/chroma_db/
+
+# OS
+.DS_Store
+Thumbs.db
