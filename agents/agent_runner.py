@@ -9,10 +9,14 @@ Uso: uv run python agents/agent_runner.py
 
 import os
 import json
+import sys
 from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from cost_tracker import record_cost
 
 # ─── Configuração ─────────────────────────────────────────────────────────────
 ROOT_DIR = Path(__file__).parent.parent
@@ -40,10 +44,10 @@ def load_agents() -> list[dict]:
     return agents
 
 
-def call_agent(agent: dict) -> str:
+def call_agent(agent: dict) -> dict:
     """
     Envia ao agente a instrução de se apresentar com nome, modelo e hello world.
-    Retorna a resposta da LLM.
+    Retorna dict com 'content', 'prompt_tokens' e 'completion_tokens'.
     """
     system_prompt = agent.get("system_prompt", "")
     model = agent.get("model", "deepseek/deepseek-chat")
@@ -77,13 +81,18 @@ def call_agent(agent: dict) -> str:
             response = client.post(OPENROUTER_URL, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
-            return data["choices"][0]["message"]["content"].strip()
+            usage = data.get("usage", {})
+            return {
+                "content": data["choices"][0]["message"]["content"].strip(),
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+            }
     except httpx.HTTPStatusError as e:
-        return f"❌ Erro HTTP {e.response.status_code}: {e.response.text}"
+        return {"content": f"❌ Erro HTTP {e.response.status_code}: {e.response.text}", "prompt_tokens": 0, "completion_tokens": 0}
     except httpx.RequestError as e:
-        return f"❌ Erro de conexão: {e}"
+        return {"content": f"❌ Erro de conexão: {e}", "prompt_tokens": 0, "completion_tokens": 0}
     except (KeyError, IndexError) as e:
-        return f"❌ Resposta inesperada da API: {e}"
+        return {"content": f"❌ Resposta inesperada da API: {e}", "prompt_tokens": 0, "completion_tokens": 0}
 
 
 def main():
@@ -114,10 +123,22 @@ def main():
         print(f"⏳ Chamando {nome} via OpenRouter...")
         print()
 
-        resposta = call_agent(agent)
+        resultado = call_agent(agent)
+        resposta = resultado["content"]
+        prompt_tokens = resultado["prompt_tokens"]
+        completion_tokens = resultado["completion_tokens"]
+
+        record_cost(
+            agent=nome,
+            model=model,
+            task="hello_world",
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
 
         print(f"💬 Resposta de {nome}:")
         print(f"   {resposta}")
+        print(f"   📊 Tokens: {prompt_tokens} in / {completion_tokens} out")
         print()
 
     print("=" * 60)
