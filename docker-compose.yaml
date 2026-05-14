@@ -19,6 +19,22 @@ services:
     volumes:
       - ./qdrant_storage:/qdrant/storage
 
+  mcp-server:
+    build:
+      context: .
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./agents:/app/agents
+      - ./project_ledger:/app/project_ledger
+      - ./.governance:/app/.governance
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on:
+      - qdrant
+
   # This would be your High-Tier Orchestrator/Proxy
   orchestrator:
     build:
