@@ -10,6 +10,9 @@ Ferramentas disponíveis:
 """
 
 import os
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from qdrant_client import QdrantClient
@@ -29,6 +32,7 @@ load_dotenv()
 
 QDRANT_URL: str = os.environ["QDRANT_URL"]
 QDRANT_API_KEY: str = os.environ["QDRANT_API_KEY"]
+LEDGER_PATH = Path(__file__).parent / "project_ledger" / "history.json"
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 VECTOR_SIZE = 384  # dimensão do all-MiniLM-L6-v2
@@ -169,6 +173,73 @@ def status(agent: str) -> dict:
         "vectors_count": info.points_count,  # <-- CORREÇÃO AQUI
         "status": str(info.status),
     }
+
+
+@mcp.tool()
+def cost_report(agent: str | None = None, period: str = "all") -> str:
+    """
+    Relatório de custo de tokens por agente.
+
+    Args:
+        agent:  Filtrar por nome de agente (opcional). None retorna todos.
+        period: "today", "week", "month" ou "all" (padrão).
+
+    Returns:
+        Tabela Markdown com tokens e custo USD agregados por agente/modelo.
+    """
+    if not LEDGER_PATH.exists():
+        return "Ledger não encontrado."
+
+    with open(LEDGER_PATH, "r", encoding="utf-8") as f:
+        ledger = json.load(f)
+
+    now = datetime.now(timezone.utc)
+    cutoffs = {"today": 1, "week": 7, "month": 30}
+    cutoff_days = cutoffs.get(period)
+
+    records = [e for e in ledger.get("logs", []) if e.get("type") == "COST_RECORD"]
+
+    if cutoff_days:
+        records = [
+            r for r in records
+            if (now - datetime.fromisoformat(r["timestamp"])).days < cutoff_days
+        ]
+
+    if agent:
+        records = [r for r in records if r.get("agent", "").lower() == agent.lower()]
+
+    if not records:
+        return f"Nenhum registro de custo encontrado (agent={agent}, period={period})."
+
+    # Agrega por agente + modelo
+    agg: dict[str, dict] = {}
+    for r in records:
+        key = f"{r.get('agent', '?')}|{r.get('model', '?')}"
+        if key not in agg:
+            agg[key] = {"agent": r.get("agent", "?"), "model": r.get("model", "?"), "prompt": 0, "completion": 0, "cost": 0.0, "calls": 0}
+        tokens = r.get("tokens", {})
+        agg[key]["prompt"] += tokens.get("prompt", 0)
+        agg[key]["completion"] += tokens.get("completion", 0)
+        agg[key]["cost"] += r.get("cost_usd", 0.0)
+        agg[key]["calls"] += 1
+
+    lines = [
+        f"## Relatório de Custo — period: {period}",
+        "",
+        "| Agente | Modelo | Chamadas | Tokens In | Tokens Out | Total | Custo USD |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    total_cost = 0.0
+    for v in sorted(agg.values(), key=lambda x: x["cost"], reverse=True):
+        total = v["prompt"] + v["completion"]
+        lines.append(
+            f"| {v['agent']} | {v['model']} | {v['calls']} "
+            f"| {v['prompt']:,} | {v['completion']:,} | {total:,} | ${v['cost']:.6f} |"
+        )
+        total_cost += v["cost"]
+
+    lines += ["", f"**Total: ${total_cost:.6f} USD** — {len(records)} interações"]
+    return "\n".join(lines)
 
 
 # ─── Entrypoint ──────────────────────────────────────────────────────────────
