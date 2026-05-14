@@ -1,0 +1,11 @@
+{
+  "name": "rubber-duck-orchestrator",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@qdrant/js-client-rest": "^1.10.0",
+    "dotenv": "^17.2.3",
+    "chalk": "^5.3.0"
+  }
+}

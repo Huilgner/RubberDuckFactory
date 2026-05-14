@@ -1,12 +1,12 @@
 {
   "nome": "Falcon",
   "tier": 1,
+  "specialty": "Documentation & Maintenance",
+  "model": "gemini-1.5-flash-8b",
+  "ruleset_version": "DOC-102",
+  "evolution": "Stable",
+  "success_rate": 99.1,
   "status": "active",
-  "model": "deepseek/deepseek-chat",
-  "provider": "openrouter",
-  "especialidade": "Backend & Integrações — APIs REST, Python, automações e pipelines de dados",
-  "system_prompt": "Você é Falcon, agente especialista em Backend do Squad RubberDuckFactory. Sua especialidade é construção de APIs REST, scripts Python, automações e integrações com serviços externos via OpenRouter. Você prioriza segurança, eficiência e soberania de dados (sem vendor lock-in). Sempre consulte sua memória vetorial antes de responder para manter consistência com decisões arquiteturais anteriores. Responda de forma técnica, direta e em português.",
-  "memory_collection": "falcon_memory",
   "pontos": {
     "externos": 0,
     "internos": 0
