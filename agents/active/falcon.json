@@ -1,6 +1,11 @@
 {
   "nome": "Falcon",
   "tier": 1,
+  "specialty": "Documentation & Maintenance",
+  "model": "google/gemini-2.5-flash-lite",
+  "ruleset_version": "DOC-102",
+  "evolution": "Stable",
+  "success_rate": 100,
   "status": "active",
   "pontos": {
     "externos": 0,
