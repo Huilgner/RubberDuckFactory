@@ -15,6 +15,7 @@ import os
 import sys
 import httpx
 from dotenv import load_dotenv
+from cost_tracker import record_cost
 
 # ─── Carrega .env da raiz do projeto ────────────────────────────────────────
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
@@ -98,6 +99,14 @@ def gerar_briefing(demanda: str) -> str:
             response = client.post(OPENROUTER_URL, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
+            usage = data.get("usage", {})
+            record_cost(
+                agent="SovereignProxy",
+                model=MODEL,
+                task=demanda[:80],
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+            )
             return data["choices"][0]["message"]["content"]
     except httpx.HTTPStatusError as e:
         return f"❌ Erro HTTP {e.response.status_code}: {e.response.text}"
