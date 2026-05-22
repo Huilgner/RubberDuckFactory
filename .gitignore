@@ -26,6 +26,7 @@ temp_freelancer_workspace/
 
 # Logs e artefatos de build
 *.log
+project_ledger/hooks_audit.log
 .DS_Store
 .vscode/
 

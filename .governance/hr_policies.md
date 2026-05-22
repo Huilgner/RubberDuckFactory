@@ -1,4 +1,4 @@
-# HR Policies — Projeto Cofre
+# HR Policies — RubberDuckFactory
 
 ## Sistema de Gamificação
 
