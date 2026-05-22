@@ -1,14 +1,9 @@
 
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-
 # RubberDuckFactory
 
 **A multi-agent governance system for AI-assisted software development.**
 
 Claude orchestrates a squad of specialized LLM agents, each governed by a tier system, a points ledger, and evolutionary fitness rules. The factory delegates: expensive cognition stays with the orchestrator, high-token low-complexity work goes to cheaper agents.
-
-</div>
 
 ---
 
@@ -107,7 +102,7 @@ Agents are defined as JSON files in `agents/active/`. Each has a model, tier, sp
 |---|---|---|---|---|
 | **Shadow** | 3 — Specialist | `google/gemini-2.5-pro` | Backend & Security | Stable |
 | **Chen** | 2 — Operator | `deepseek/deepseek-chat` | Backend Engineering | Stable |
-| **Nova** | 2 — Operator | `google/gemini-2.5-flash` | Frontend Development | Mutating |
+| **Nova** | 2 — Operator | `google/gemini-2.5-flash` | Frontend Development | Stable |
 | **Phoenix** | 1 — Observer | `anthropic/claude-opus-4` | Elixir / OTP | Stable |
 | **Falcon** | 1 — Observer | `google/gemini-2.5-flash-lite` | Documentation & Maintenance | Stable |
 | **Quill** | 1 — Observer | `deepseek/deepseek-v4-flash:free` | Technical Documentation | Stable |
@@ -144,7 +139,16 @@ Decisions, architectural notes, and task outcomes can be stored as vector embedd
 
 The Python MCP server exposes tools over HTTP (FastMCP + uvicorn, streamable-http transport). Claude Code connects via `.mcp.json`. Adding new tools to the factory requires only adding a `@mcp.tool()` function to `server.py` — no protocol changes needed.
 
-### 7. Blacklist Pressure
+### 7. L3 Hooks — Guardrails Determinísticos
+
+Configurados em `.claude/settings.json`, os hooks disparam por evento antes ou depois de cada ferramenta do Claude Code — sem depender do modelo julgar se algo é seguro.
+
+- **PreToolUse:** bloqueia comandos destrutivos (`rm -rf`, `git push --force`, `DROP TABLE`), protege arquivos de governança de edição direta e valida o schema dos JSONs de agente antes de salvar
+- **PostToolUse:** registra toda execução de Bash/Edit/Write em `project_ledger/hooks_audit.log` e avisa quando `success_rate` de um agente sugere mudança de estado evolutivo
+- **SessionStart:** injeta o estado atual do squad no início de cada sessão (evolution state, pontos por agente)
+- **Stop:** ao fim de cada turno, emite um digest das operações executadas naquele turno
+
+### 8. Blacklist Pressure
 
 Agents that cause critical infractions (e.g., hallucinating in production) are dismissed rather than silently retired. The blacklist record documents the cause, creating a labeled negative example for future model selection decisions.
 
@@ -173,7 +177,7 @@ Agents that cause critical infractions (e.g., hallucinating in production) are d
 Full rules in `.governance/hr_policies.md`. Summary:
 
 - **Points:** External (verifiable deliveries) + Internal (squad contributions)
-- **Infractions:** Leve (−5 pts) → Média (−15) → Grave (−30 + warning) → Crítica (dismissal)
+- **Infractions:** Leve (−1 ext/int) → Média (−2) → Grave (−5) → Crítica (−10 + Blacklist imediata)
 - **Evolution:** `Stable` ↔ `Mutating` ↔ `Degraded` — driven by recent success rate and penalty history
 - **Dismissal:** Agent JSON moved to `agents/blacklist/`, event recorded in ledger
 
@@ -185,22 +189,26 @@ Model selection rules (what to avoid) are in `.governance/model_caution_list.md`
 
 ```
 RubberDuckFactory/
+├── .claude/
+│   ├── settings.json               # Hook configuration (guardrails)
+│   └── hooks/                      # PreToolUse / PostToolUse / Stop / SessionStart scripts
 ├── .governance/
-│   ├── hr_policies.md          # Tier system, points, infractions, dismissal rules
-│   └── model_caution_list.md   # Models to avoid and why
+│   ├── hr_policies.md              # Tier system, points, infractions, dismissal rules
+│   └── model_caution_list.md       # Models to avoid and why
 ├── agents/
-│   ├── active/                 # Live agent JSON configs
-│   └── blacklist/              # Dismissed agents with cause
-├── board/                      # Next.js dashboard (Docker multi-stage)
+│   ├── active/                     # Live agent JSON configs
+│   └── blacklist/                  # Dismissed agents with cause
+├── board/                          # Next.js dashboard (Docker multi-stage)
 ├── docs/
-│   └── ADR-003-*.md            # Architecture Decision Records
-├── orchestrator/               # TypeScript demo runner
+│   └── ADR-003-*.md                # Architecture Decision Records
+├── orchestrator/                   # TypeScript demo runner
 ├── project_ledger/
-│   └── history.json            # Append-only event log
-├── .mcp.json                   # MCP server registration for Claude Code
-├── CLAUDE.md                   # Orchestration rules and delegation matrix
-├── docker-compose.yaml         # Full stack definition
-├── server.py                   # MCP server (FastMCP + uvicorn)
-└── sovereign_proxy.py          # OpenRouter proxy for agent calls
+│   ├── history.json                # Append-only event log
+│   └── hooks_audit.log             # Hook audit trail (gerado em runtime)
+├── .mcp.json                       # MCP server registration for Claude Code
+├── CLAUDE.md                       # Orchestration rules and delegation matrix
+├── docker-compose.yaml             # Full stack definition
+├── server.py                       # MCP server (FastMCP + uvicorn)
+└── sovereign_proxy.py              # OpenRouter proxy for agent calls
 ```
 

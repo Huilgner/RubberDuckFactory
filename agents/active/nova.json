@@ -4,11 +4,11 @@
   "specialty": "Frontend Development",
   "model": "google/gemini-2.5-flash",
   "ruleset_version": "FE-505",
-  "evolution": "Mutating",
-  "success_rate": 83.8,
+  "evolution": "Stable",
+  "success_rate": 84.3,
   "status": "active",
   "pontos": {
-    "externos": 50,
-    "internos": 20
+    "externos": 0,
+    "internos": 0
   }
 }
