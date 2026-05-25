@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SYSTEM_NODES, HOOK_METADATA } from '../data';
 import { DiagramNode, Position } from '../types';
-import { ZoomIn, ZoomOut, Maximize2, Move, HelpCircle, RefreshCw } from 'lucide-react';
+import { LiveAgent, EVOLUTION_COLOR } from '../hooks/useAgentData';
+import { ZoomIn, ZoomOut, Maximize2, Move, HelpCircle } from 'lucide-react';
 
 interface DiagramBoardProps {
   onSelectNode: (node: DiagramNode) => void;
@@ -9,6 +10,7 @@ interface DiagramBoardProps {
   activeNodes: string[];
   activePaths: string[];
   simStep: number;
+  liveAgents?: Record<string, LiveAgent>;
 }
 
 export default function DiagramBoard({
@@ -16,7 +18,8 @@ export default function DiagramBoard({
   selectedNodeId,
   activeNodes,
   activePaths,
-  simStep
+  simStep,
+  liveAgents = {}
 }: DiagramBoardProps) {
   // Navigation states for zooming and panning
   const [scale, setScale] = useState<number>(0.55);
@@ -94,6 +97,24 @@ export default function DiagramBoard({
   const adjustScale = (factor: number) => {
     const newScale = Math.min(Math.max(scale * factor, 0.15), 2.5);
     setScale(newScale);
+  };
+
+  // Renderiza badge de evolution + pontos ao vivo para cada agente
+  const renderLiveBadge = (nodeId: string, x: number, y: number) => {
+    const live = liveAgents[nodeId];
+    if (!live) return null;
+    const color = EVOLUTION_COLOR[live.evolution] || '#90A4AE';
+    return (
+      <>
+        <circle cx={x + 5} cy={y + 5} r="4" fill={color} opacity="0.9" />
+        <text x={x + 14} y={y + 9} fill={color} fontSize="9.5" fontFamily="monospace" fontWeight="bold">
+          {live.evolution}
+        </text>
+        <text x={x + 80} y={y + 9} fill="#4B5563" fontSize="9" fontFamily="monospace">
+          {live.pontos.externos}ext · {live.pontos.internos}int
+        </text>
+      </>
+    );
   };
 
   // Helper colors classes for background highlighting
@@ -712,6 +733,7 @@ export default function DiagramBoard({
                   </g>
                 );
               })()}
+              {renderLiveBadge('agent-shadow', 15, 135)}
             </g>
 
             {/* TIER 2 — Operator Box Container */}
@@ -792,6 +814,10 @@ export default function DiagramBoard({
                   </g>
                 );
               })()}
+              {renderLiveBadge('agent-chen',  15,  135)}
+              {renderLiveBadge('agent-nova',  295, 135)}
+              {renderLiveBadge('agent-atlas', 575, 135)}
+              {renderLiveBadge('agent-lens',  855, 135)}
             </g>
 
             {/* TIER 1 — Observer Box Container */}
@@ -854,6 +880,9 @@ export default function DiagramBoard({
                   </g>
                 );
               })()}
+              {renderLiveBadge('agent-phoenix', 15,  135)}
+              {renderLiveBadge('agent-falcon',  205, 135)}
+              {renderLiveBadge('agent-quill',   395, 135)}
             </g>
 
             {/* Blacklist Section centered below */}
