@@ -1,0 +1,6 @@
+{
+  "name": "RubberDuckFactory System Architecture",
+  "description": "Interactive, clean technical architecture diagram and live flow visualization of RubberDuckFactory.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
