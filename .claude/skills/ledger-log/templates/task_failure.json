@@ -1,0 +1,7 @@
+{
+  "timestamp": "YYYY-MM-DDTHH:MM:SS.000Z",
+  "type": "TASK_FAILURE",
+  "agent": "[NomeDoAgente]",
+  "task": "[Descrição concisa da tarefa]",
+  "reason": "[Motivo da falha — o que o agente não conseguiu fazer e por quê]"
+}

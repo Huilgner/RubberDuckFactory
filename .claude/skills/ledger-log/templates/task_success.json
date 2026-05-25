@@ -1,0 +1,6 @@
+{
+  "timestamp": "YYYY-MM-DDTHH:MM:SS.000Z",
+  "type": "TASK_SUCCESS",
+  "agent": "[NomeDoAgente]",
+  "task": "[Descrição concisa da tarefa completada]"
+}

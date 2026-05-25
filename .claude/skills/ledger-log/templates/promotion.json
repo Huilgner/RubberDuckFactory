@@ -1,0 +1,8 @@
+{
+  "timestamp": "YYYY-MM-DDTHH:MM:SS.000Z",
+  "type": "PROMOTION",
+  "agent": "[NomeDoAgente]",
+  "from_tier": 1,
+  "to_tier": 2,
+  "reason": "[Atingiu threshold: Xext / Yint — ou justificativa manual]"
+}
