@@ -81,15 +81,20 @@ Full rules in `.governance/hr_policies.md`. Key points:
 ## Running the Stack
 
 ```bash
-# Start all services
-cd C:\RubberDuckFactory
+# Uso normal — board, qdrant, mcp-server
 docker compose up -d
 
-# Services:
+# Onboarding — adiciona o diagrama interativo (localhost:3002)
+docker compose --profile onboarding up -d
+
+# Services (normal):
 # board (Next.js UI)  → http://localhost:3001
 # qdrant (vector DB)  → http://localhost:6333
 # mcp-server          → http://localhost:8001/mcp
 # orchestrator        → runs demo and exits (exit 0 is normal)
+
+# Services (onboarding, adicional):
+# architecture-map    → http://localhost:3002
 ```
 
 The MCP server must be running for `remember`/`recall`/`forget`/`status` tools to work.
