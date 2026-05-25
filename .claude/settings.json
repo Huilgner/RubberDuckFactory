@@ -6,6 +6,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_code_freeze.py"
+          },
+          {
+            "type": "command",
             "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_bash_guard.py"
           }
         ]
@@ -13,6 +17,10 @@
       {
         "matcher": "Edit",
         "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_code_freeze.py"
+          },
           {
             "type": "command",
             "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_governance_guard.py"
@@ -26,6 +34,10 @@
       {
         "matcher": "Write",
         "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_code_freeze.py"
+          },
           {
             "type": "command",
             "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_governance_guard.py"

@@ -29,6 +29,8 @@ When Docker is running (`docker compose up -d` in `C:\RubberDuckFactory`), the M
 | Shadow | 3 — Specialist | google/gemini-2.5-pro | Backend & Security | Security review, sensitive architecture, complex backend decisions |
 | Chen | 2 — Operator | deepseek/deepseek-chat | Backend Engineering | Backend boilerplate, CRUD, API routes, DB queries, high-token low-complexity tasks |
 | Nova | 2 — Operator | google/gemini-2.5-flash | Frontend Development | React/Next.js components, styling, frontend refactors |
+| Atlas | 2 — Operator | google/gemini-2.5-flash | SRE & Infrastructure | Deploy committee: infra validation, service health, CI/CD, availability |
+| Lens | 2 — Operator | deepseek/deepseek-chat | QA & Observability | Deploy committee: API health, log scanning, frontend integrity, error tracking |
 | Phoenix | 1 — Observer | anthropic/claude-opus-4 | Elixir / OTP | Elixir/Phoenix/LiveView, OTP supervision trees, GenServer patterns |
 | Falcon | 1 — Observer | google/gemini-2.5-flash-lite | Documentation & Maintenance | README updates, changelog, light refactors, file renaming |
 | Quill | 1 — Observer | deepseek/deepseek-v4-flash:free | Technical Documentation | ADRs, architecture docs, meeting notes, summarizing agent outputs |
@@ -116,6 +118,24 @@ Hooks nunca adicionam tokens ao contexto de agentes externos — atuam apenas no
 
 See `.governance/model_caution_list.md` before assigning a model to a new agent.
 Key prohibitions: models < 30B params for code, `*-thinking/*-r1` variants for simple tasks, Gemini 1.5 family (discontinued on OpenRouter), any model ID without `provider/` prefix.
+
+---
+
+## Deploy Committee — Release Manager
+
+Ao ser acionado para preparar ou finalizar um deploy de MVP, o orquestrador atua como **Release Manager**.
+
+**Restrição obrigatória:** nesta fase, o orquestrador está PROIBIDO de analisar arquivos de código-fonte diretamente para inferir qualidade. Toda varredura deve ser delegada aos especialistas do comitê.
+
+**Fluxo (use a skill `deploy-committee` para guia completo):**
+
+1. Ativar Code Freeze via MCP: `deploy_freeze(action="set")`
+2. Invocar em paralelo: **Shadow** (SecOps) + **Atlas** (SRE) + **Lens** (QA)
+3. Aguardar relatórios estruturados de cada especialista
+4. Emitir veredito: `deploy_verdict(reports=[...])`
+5. **GO** → remover freeze. **NO_GO** → manter freeze + sumário executivo para intervenção humana
+
+Deploy em produção só é autorizado com **aprovação unânime e sem apontamentos ALTA/CRÍTICA** do comitê.
 
 ---
 
