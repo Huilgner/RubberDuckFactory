@@ -12,13 +12,7 @@ RUN npm run build
 FROM nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Single-page app: redirecionar todas as rotas para index.html
-RUN echo 'server { \
-  listen 80; \
-  root /usr/share/nginx/html; \
-  index index.html; \
-  location / { try_files $uri $uri/ /index.html; } \
-}' > /etc/nginx/conf.d/default.conf
-
+# /agents/active/ é montado via docker-compose como volume em runtime
 EXPOSE 80

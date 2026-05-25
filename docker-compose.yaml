@@ -42,6 +42,8 @@ services:
       context: ./architecture-map
     ports:
       - "3002:80"
+    volumes:
+      - ./agents/active:/agents/active:ro
 
   # This would be your High-Tier Orchestrator/Proxy
   orchestrator:

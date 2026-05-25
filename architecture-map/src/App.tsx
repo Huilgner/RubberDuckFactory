@@ -4,12 +4,16 @@ import { DiagramNode, SimulationLog, SimulationState } from './types';
 import DiagramBoard from './components/DiagramBoard';
 import InspectorPanel from './components/InspectorPanel';
 import ActiveSimulationConsole from './components/ActiveSimulationConsole';
-import { Layers, ShieldCheck, Cpu, Terminal, RefreshCw, LayoutGrid, Award, BookOpen } from 'lucide-react';
+import { useAgentData } from './hooks/useAgentData';
+import { Layers, ShieldCheck, Cpu, Terminal, RefreshCw, LayoutGrid, Award, BookOpen, Radio } from 'lucide-react';
 
 export default function App() {
+  // Live agent data from agents/active/*.json
+  const { agents: liveAgents, isLive } = useAgentData();
+
   // UI Tabs for small screens (Mobile view routing)
   const [activeTab, setActiveTab] = useState<'diagram' | 'inspector' | 'simulator'>('diagram');
-  
+
   // Selection and State highlights
   const [selectedNode, setSelectedNode] = useState<DiagramNode | null>(null);
   const [verdict, setVerdict] = useState<'GO' | 'NO_GO'>('GO');
@@ -35,6 +39,15 @@ export default function App() {
       logs: [...prev.logs, { timestamp: timeStr, level, source, message }]
     }));
   }, []);
+
+  // Auto-play: iniciar simulação automaticamente após 2s
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      addLog('System', 'Demo iniciada — RubberDuckFactory em execução.', 'info');
+      setSimState(prev => ({ ...prev, isActive: true, currentStep: 1 }));
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [addLog]);
 
   // Update SVG highlights corresponding to current state timeline level
   useEffect(() => {
@@ -292,6 +305,11 @@ export default function App() {
               <span className="text-[10px] font-mono px-1.5 py-0.5 bg-[#2196F3]/10 text-[#4FC3F7] border border-[#4FC3F7]/20 rounded">
                 L3 AGENT GRID
               </span>
+              {isLive && (
+                <span className="flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">
+                  <Radio className="w-2.5 h-2.5 animate-pulse" /> LIVE
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-400 font-medium">Multi-Tier Autonomous Guardrail Architecture Configuration</p>
           </div>
@@ -390,6 +408,7 @@ export default function App() {
                 activeNodes={simState.activeNodes}
                 activePaths={simState.activePaths}
                 simStep={simState.currentStep}
+                liveAgents={liveAgents}
               />
             </div>
 
