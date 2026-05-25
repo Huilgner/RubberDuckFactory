@@ -1,0 +1,7 @@
+{
+  "timestamp": "YYYY-MM-DDTHH:MM:SS.000Z",
+  "type": "HALLUCINATION",
+  "agent": "[NomeDoAgente]",
+  "task": "[Descrição concisa da tarefa]",
+  "description": "[O que o agente fabricou — dado, função, API, comportamento inexistente]"
+}

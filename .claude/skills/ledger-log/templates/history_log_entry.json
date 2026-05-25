@@ -1,0 +1,8 @@
+{
+  "id": "PRJ-[NNN]",
+  "nome": "[Nome curto do milestone]",
+  "data": "YYYY-MM-DD",
+  "resultado": "Sucesso",
+  "descricao": "[Descrição detalhada: o que foi feito, por que, como, aprendizados relevantes]",
+  "agentes_envolvidos": ["Arquiteto", "[NomeDoAgente]"]
+}

@@ -1,0 +1,8 @@
+{
+  "timestamp": "YYYY-MM-DDTHH:MM:SS.000Z",
+  "type": "BLACKLIST",
+  "agent": "[NomeDoAgente]",
+  "reason": "[Infração crítica: descrição do que aconteceu]",
+  "final_points_ext": 0,
+  "final_points_int": 0
+}
