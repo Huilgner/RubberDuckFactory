@@ -1,4 +1,8 @@
 
+<p align="center">
+  <img src="assets/logo.png" alt="RubberDuckFactory" width="320">
+</p>
+
 # RubberDuckFactory
 
 **A multi-agent governance system for AI-assisted software development.**
