@@ -1,0 +1,98 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_bash_guard.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_governance_guard.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_agent_schema_guard.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_governance_guard.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_agent_schema_guard.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_audit_log.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_audit_log.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_agent_evolution_flag.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_audit_log.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_agent_evolution_flag.py"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\session_squad_status.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\stop_session_digest.py"
+          }
+        ]
+      }
+    ]
+  }
+}

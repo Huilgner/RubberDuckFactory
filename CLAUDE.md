@@ -70,7 +70,7 @@ Full rules in `.governance/hr_policies.md`. Key points:
 
 - Points are **External** (verifiable deliveries) and **Internal** (squad contributions)
 - Evolution states: `Stable` → `Mutating` → `Degraded`
-- Infractions: Leve (−5), Média (−15), Grave (−30 + warning), Crítica (dismissal)
+- Infractions: Leve (−1 ext/int), Média (−2), Grave (−5), Crítica (−10 + Blacklist imediata)
 - Dismissal moves agent JSON to `agents/blacklist/` with a dismissal report
 - Ledger of all actions in `history.json` — append-only, never edit past entries
 
@@ -91,6 +91,24 @@ docker compose up -d
 ```
 
 The MCP server must be running for `remember`/`recall`/`forget`/`status` tools to work.
+
+---
+
+## Hooks — Guardrails Determinísticos
+
+Configurados em `.claude/settings.json`. Disparam automaticamente por evento — não dependem do modelo julgar.
+
+| Hook | Evento | Arquivo | Ação |
+|---|---|---|---|
+| `pre_bash_guard` | `PreToolUse: Bash` | `pre_bash_guard.py` | Bloqueia (exit 2): `rm -rf`, `git reset --hard`, `git push --force`, `DROP TABLE/DATABASE`. Avisa sobre modelos da caution list |
+| `pre_governance_guard` | `PreToolUse: Edit, Write` | `pre_governance_guard.py` | Bloqueia edições diretas em `.governance/hr_policies.md` e `agents/blacklist/` |
+| `pre_agent_schema_guard` | `PreToolUse: Edit, Write` | `pre_agent_schema_guard.py` | Bloqueia JSONs de agente com campos ausentes, `evolution` inválido, tier fora de [1-4] ou pontos negativos |
+| `post_audit_log` | `PostToolUse: Bash, Edit, Write` | `post_audit_log.py` | Registra cada operação em `project_ledger/hooks_audit.log` |
+| `post_agent_evolution_flag` | `PostToolUse: Edit, Write` | `post_agent_evolution_flag.py` | Após edição de agente: avisa se `success_rate` sugere mudança de estado evolutivo ou se pontos ficaram abaixo do threshold do tier |
+| `session_squad_status` | `SessionStart` | `session_squad_status.py` | Injeta estado atual do squad no início de cada sessão |
+| `stop_session_digest` | `Stop` | `stop_session_digest.py` | Ao fim de cada turno: lista operações executadas naquele turno |
+
+Hooks nunca adicionam tokens ao contexto de agentes externos — atuam apenas no ciclo do Claude Code.
 
 ---
 
