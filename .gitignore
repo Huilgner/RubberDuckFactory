@@ -1,6 +1,8 @@
 node_modules/
 build/
 dist/
+architecture-map/node_modules/
+architecture-map/dist/
 coverage/
 
 # Variáveis de ambiente e segredos
