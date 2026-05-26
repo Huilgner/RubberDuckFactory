@@ -29,13 +29,28 @@ Consulte `agents/active/` antes de delegar — verifique `evolution` e `success_
 
 ```bash
 cd C:\RubberDuckFactory
-uv run python agents/agent_runner.py --agent <nome_lowercase> --task "<briefing>"
+uv run python agents/agent_runner.py --agent <nome> --task "<briefing>" [--project "<projeto>"]
 ```
 
-Exemplo:
+Flags:
+- `--agent / -a` — nome do agente (case-insensitive: chen, nova, shadow...)
+- `--task  / -t` — briefing completo da tarefa
+- `--project / -p` — nome do projeto para o ledger (padrão: RubberDuckFactory)
+
+Exemplos:
 ```bash
-uv run python agents/agent_runner.py --agent chen --task "Implementar endpoint POST /api/payments com validação de input e registro em PostgreSQL. Retornar 201 em sucesso e 422 em falha de validação."
+uv run python agents/agent_runner.py --agent chen --task "Implementar endpoint POST /api/payments com validacao de input. Retornar 201 em sucesso e 422 em falha."
+
+uv run python agents/agent_runner.py -a nova -t "Criar componente Card reutilizavel em React/TypeScript com props: title, description, imageUrl." -p "ClienteXYZ"
 ```
+
+Pos-execucao automatica (modo tarefa):
+- `tasks_completed` ou `tasks_failed` incrementado no JSON do agente
+- `success_rate` recalculado; evolucao aplicada se threshold for cruzado
+- Entrada `TAREFA_OK` / `TAREFA_FALHA` gravada em `project_ledger/agent_ledger.log`
+- Entrada `TASK_SUCCESS` / `TASK_FAILURE` gravada em `project_ledger/history.json`
+
+Agentes em `evolution: Degraded` sao bloqueados automaticamente (exit 1).
 
 ---
 
