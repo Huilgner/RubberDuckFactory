@@ -10,5 +10,7 @@
   "pontos": {
     "externos": 0,
     "internos": 0
-  }
+  },
+  "tasks_completed": 0,
+  "tasks_failed": 0
 }

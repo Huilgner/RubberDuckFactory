@@ -1,0 +1,9 @@
+{
+  "timestamp": "YYYY-MM-DDTHH:MM:SS.000Z",
+  "type": "INFRACTION",
+  "agent": "[NomeDoAgente]",
+  "severity": "[Leve | Média | Grave | Crítica]",
+  "description": "[Descrição da infração — o que aconteceu]",
+  "penalty_ext": -1,
+  "penalty_int": -1
+}

@@ -90,6 +90,29 @@ cd agents
 python agent_runner.py --agent shadow --task "Review authentication module for security issues"
 ```
 
+### 6. Deploy Committee (quality gate)
+
+Before triggering a deploy, the orchestrator activates the Deploy Committee — a parallel audit by three specialist agents.
+
+**Prerequisites (one-time, Windows host Python):**
+
+```bash
+C:\Users\huilg\AppData\Local\Programs\Python\Python312\python.exe -m pip install bandit pyyaml mcp
+```
+
+> `quality_gate_server.py` starts automatically via `.mcp.json` (stdio transport). No manual startup needed — Claude Code launches it when the session opens.
+
+**Workflow:**
+
+| Phase | Action |
+|---|---|
+| **1 — Code Freeze** | `deploy_freeze(action="set")` — blocks all Edit/Write/git until lifted |
+| **2 — Parallel audit** | Shadow (SecOps · `quality_gate_sast`) + Atlas (SRE · `quality_gate_infra_read`, `quality_gate_api_health`) + Lens (QA · `quality_gate_api_health`, `quality_gate_log_scan`) |
+| **3 — Reports** | Each agent returns `severity` (OK / LEVE / MÉDIA / ALTA / CRÍTICA) + `recommendation` (GO / NO_GO) |
+| **4 — Verdict** | `deploy_verdict(reports=[...])` — ALTA or CRÍTICA triggers automatic NO_GO; freeze is removed only on GO |
+
+Use the skill `/deploy-committee` in Claude Code to be guided step by step.
+
 ### Stopping the stack
 
 ```bash
@@ -107,6 +130,8 @@ Agents are defined as JSON files in `agents/active/`. Each has a model, tier, sp
 | **Shadow** | 3 — Specialist | `google/gemini-2.5-pro` | Backend & Security | Stable |
 | **Chen** | 2 — Operator | `deepseek/deepseek-chat` | Backend Engineering | Stable |
 | **Nova** | 2 — Operator | `google/gemini-2.5-flash` | Frontend Development | Stable |
+| **Atlas** | 2 — Operator | `google/gemini-2.5-flash` | SRE & Infrastructure | Stable |
+| **Lens** | 2 — Operator | `deepseek/deepseek-chat` | QA & Observability | Stable |
 | **Phoenix** | 1 — Observer | `anthropic/claude-opus-4` | Elixir / OTP | Stable |
 | **Falcon** | 1 — Observer | `google/gemini-2.5-flash-lite` | Documentation & Maintenance | Stable |
 | **Quill** | 1 — Observer | `deepseek/deepseek-v4-flash:free` | Technical Documentation | Stable |
@@ -152,7 +177,11 @@ Configurados em `.claude/settings.json`, os hooks disparam por evento antes ou d
 - **SessionStart:** injeta o estado atual do squad no início de cada sessão (evolution state, pontos por agente)
 - **Stop:** ao fim de cada turno, emite um digest das operações executadas naquele turno
 
-### 8. Blacklist Pressure
+### 8. Deploy Committee — Quality Gate
+
+Before any production deploy, the orchestrator freezes the codebase (`deploy_freeze`) and delegates to three specialist agents in parallel: **Shadow** (SecOps, static analysis via bandit), **Atlas** (SRE, infra and service health), and **Lens** (QA, API health and log scanning). Each agent calls MCP tools that produce deterministic results — no reasoning shortcuts. The orchestrator then consolidates the three reports via `deploy_verdict` and issues a GO or NO_GO. ALTA or CRÍTICA severity anywhere in the committee is an automatic NO_GO; the freeze stays active until human intervention resolves the finding.
+
+### 9. Blacklist Pressure
 
 Agents that cause critical infractions (e.g., hallucinating in production) are dismissed rather than silently retired. The blacklist record documents the cause, creating a labeled negative example for future model selection decisions.
 
@@ -195,7 +224,12 @@ Model selection rules (what to avoid) are in `.governance/model_caution_list.md`
 RubberDuckFactory/
 ├── .claude/
 │   ├── settings.json               # Hook configuration (guardrails)
-│   └── hooks/                      # PreToolUse / PostToolUse / Stop / SessionStart scripts
+│   ├── hooks/                      # PreToolUse / PostToolUse / Stop / SessionStart scripts
+│   └── skills/
+│       ├── agent-briefing/         # Skill: how to select and brief an agent
+│       ├── deploy-committee/       # Skill: 4-phase quality gate workflow
+│       ├── governance-check/       # Skill: infraction classification and promotions
+│       └── ledger-log/             # Skill: how to record events in history.json
 ├── .governance/
 │   ├── hr_policies.md              # Tier system, points, infractions, dismissal rules
 │   └── model_caution_list.md       # Models to avoid and why
@@ -212,7 +246,8 @@ RubberDuckFactory/
 ├── .mcp.json                       # MCP server registration for Claude Code
 ├── CLAUDE.md                       # Orchestration rules and delegation matrix
 ├── docker-compose.yaml             # Full stack definition
-├── server.py                       # MCP server (FastMCP + uvicorn)
+├── quality_gate_server.py          # Quality gate MCP server (host Python, stdio)
+├── server.py                       # MCP server (FastMCP + uvicorn, Docker)
 └── sovereign_proxy.py              # OpenRouter proxy for agent calls
 ```
 

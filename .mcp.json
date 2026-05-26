@@ -3,6 +3,11 @@
     "rubberduck-memory": {
       "type": "http",
       "url": "http://localhost:8001/mcp"
+    },
+    "rubberduck-quality-gate": {
+      "type": "stdio",
+      "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "args": ["C:\\RubberDuckFactory\\quality_gate_server.py"]
     }
   }
 }

@@ -37,6 +37,16 @@ services:
     depends_on:
       - qdrant
 
+  architecture-map:
+    build:
+      context: ./architecture-map
+    ports:
+      - "3002:80"
+    volumes:
+      - ./agents/active:/agents/active:ro
+    profiles:
+      - onboarding
+
   # This would be your High-Tier Orchestrator/Proxy
   orchestrator:
     build:

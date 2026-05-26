@@ -1,0 +1,4 @@
+# agent_ledger.log — RubberDuckFactory
+# Formato JSONL (JSON Lines) — append-only. Gerado a partir de 2026-05-26T03:15:04Z
+# Tipos: PONTO_GANHO | PONTO_PERDIDO | EVOLUCAO | TAREFA_OK | TAREFA_FALHA
+{"ts": "2026-05-26T03:15:04Z", "type": "EVOLUCAO", "agent": "Nova", "from": "Stable", "to": "Mutating", "success_rate": 84.8, "trigger": "hook_automatico_retroativo"}
