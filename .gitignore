@@ -29,6 +29,8 @@ temp_freelancer_workspace/
 # Logs e artefatos de build
 *.log
 project_ledger/hooks_audit.log
+# Ledger de governança é rastreado mesmo sendo .log
+!project_ledger/agent_ledger.log
 .DS_Store
 .vscode/
 
