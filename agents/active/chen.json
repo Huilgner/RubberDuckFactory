@@ -6,9 +6,11 @@
   "ruleset_version": "BK-202",
   "status": "active",
   "evolution": "Stable",
-  "success_rate": 98.5,
+  "success_rate": 99,
   "pontos": {
     "externos": 0,
     "internos": 0
-  }
+  },
+  "tasks_completed": 0,
+  "tasks_failed": 0
 }
