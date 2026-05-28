@@ -1,0 +1,5 @@
+{
+  "_schema": "1.0",
+  "_description": "Registro de propriedade e histórico de edições por arquivo. Atualizado pelos hooks post_file_registry.py e agent_runner.py --files.",
+  "files": {}
+}

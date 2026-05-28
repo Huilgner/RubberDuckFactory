@@ -28,6 +28,10 @@
           {
             "type": "command",
             "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_agent_schema_guard.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_edit_guard.py"
           }
         ]
       },
@@ -45,6 +49,10 @@
           {
             "type": "command",
             "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_agent_schema_guard.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\pre_edit_guard.py"
           }
         ]
       }
@@ -69,6 +77,10 @@
           {
             "type": "command",
             "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_agent_evolution_flag.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_file_registry.py"
           }
         ]
       },
@@ -82,6 +94,10 @@
           {
             "type": "command",
             "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_agent_evolution_flag.py"
+          },
+          {
+            "type": "command",
+            "command": "C:\\Users\\huilg\\AppData\\Local\\Programs\\Python\\Python312\\python.exe C:\\RubberDuckFactory\\.claude\\hooks\\post_file_registry.py"
           }
         ]
       }

@@ -39,9 +39,10 @@ from cost_tracker import record_cost
 # Configuracao
 # ---------------------------------------------------------------------------
 
-ROOT_DIR   = Path(__file__).parent.parent
-AGENTS_DIR = ROOT_DIR / "agents" / "active"
-LEDGER_DIR = ROOT_DIR / "project_ledger"
+ROOT_DIR       = Path(__file__).parent.parent
+AGENTS_DIR     = ROOT_DIR / "agents" / "active"
+LEDGER_DIR     = ROOT_DIR / "project_ledger"
+FILE_REGISTRY  = LEDGER_DIR / "file_registry.json"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 load_dotenv(ROOT_DIR / ".env")
@@ -342,7 +343,121 @@ def run_hello_world() -> None:
     print("=" * 60)
 
 
-def run_task(agent_name: str, task: str, project: str) -> None:
+# ---------------------------------------------------------------------------
+# File registry — atualização de autoria por agente
+# ---------------------------------------------------------------------------
+
+def update_file_registry(files: list[str], agent: dict, project: str) -> None:
+    """
+    Registra o agente como autor da edição em cada arquivo listado.
+    Chamado por run_task quando --files é fornecido.
+    """
+    nome  = agent.get("nome", "?")
+    tier  = agent.get("tier", 1)
+    model = agent.get("model", "?")
+    ts    = _ts()
+
+    try:
+        if FILE_REGISTRY.exists():
+            data = json.loads(FILE_REGISTRY.read_text(encoding="utf-8"))
+        else:
+            data = {"_schema": "1.0", "files": {}}
+
+        reg = data.setdefault("files", {})
+        for rel in files:
+            rel = rel.strip().replace("\\", "/")
+            if not rel:
+                continue
+            entry = reg.get(rel, {
+                "owner":      nome,
+                "created_by": nome,
+                "created_ts": ts,
+                "edit_count": 0,
+                "co_authors": [],
+            })
+            entry["last_edited_by"] = nome
+            entry["last_edit_ts"]   = ts
+            entry["last_model"]     = model
+            entry["last_tier"]      = tier
+            entry["last_project"]   = project
+            entry["edit_count"]     = entry.get("edit_count", 0) + 1
+            co = entry.setdefault("co_authors", [])
+            if nome not in co:
+                co.append(nome)
+            reg[rel] = entry
+
+        FILE_REGISTRY.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(f"  [file_registry] {len(files)} arquivo(s) registrados como editados por {nome}")
+    except Exception as e:
+        print(f"  [WARNING] Não foi possível atualizar file_registry: {e}")
+
+
+# ---------------------------------------------------------------------------
+# RAG signature — grava assinatura da tarefa no ChromaDB (squad_knowledge)
+# ---------------------------------------------------------------------------
+
+def write_rag_signature(agent: dict, task: str, response: str, project: str) -> None:
+    """
+    Indexa a tarefa + resposta no ChromaDB (squad_knowledge) com metadados de autoria.
+    Falha silenciosamente se chromadb/sentence_transformers não estiverem disponíveis.
+    """
+    try:
+        import chromadb
+        from chromadb.config import Settings as ChromaSettings
+        from sentence_transformers import SentenceTransformer
+
+        nome  = agent.get("nome", "?")
+        model = agent.get("model", "?")
+        tier  = agent.get("tier", 1)
+        ts    = _ts()
+
+        db_path    = str(ROOT_DIR / "memory" / "chroma_db")
+        chroma_cli = chromadb.PersistentClient(
+            path=db_path,
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        collection = chroma_cli.get_or_create_collection(
+            name="squad_knowledge",
+            metadata={"hnsw:space": "cosine"},
+        )
+
+        encoder  = SentenceTransformer("all-MiniLM-L6-v2")
+        doc_text = (
+            f"[TAREFA — {nome} | {ts}]\n"
+            f"Projeto: {project}\n"
+            f"Briefing: {task[:400]}\n"
+            f"Resposta: {response[:600]}"
+        )
+        embedding = encoder.encode(doc_text).tolist()
+
+        # ID único: agent + timestamp (sem colisão)
+        doc_id = f"{nome.lower()}_{ts.replace(':', '').replace('-', '').replace('+', '')[:17]}"
+
+        collection.add(
+            ids=[doc_id],
+            embeddings=[embedding],
+            documents=[doc_text],
+            metadatas=[{
+                "agent":    nome,
+                "model":    model,
+                "tier":     str(tier),
+                "project":  project,
+                "task_type": "agent_task",
+                "timestamp": ts,
+                "topic":    f"task/{nome.lower()}",
+                "source":   "agent_runner",
+            }],
+        )
+        print(f"  [rag_signature] ✅ Tarefa de {nome} indexada em squad_knowledge (id={doc_id})")
+    except ImportError:
+        pass  # chromadb/sentence_transformers não instalado — silencioso
+    except Exception as e:
+        print(f"  [WARNING] RAG signature falhou: {e}")
+
+
+def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None) -> None:
     """Modo tarefa: delega briefing especifico a um agente e registra tudo."""
     agent     = load_agent(agent_name)
     nome      = agent.get("nome", "?")
@@ -383,6 +498,12 @@ def run_task(agent_name: str, task: str, project: str) -> None:
     updated = update_agent_stats(agent, technical_success)
     write_task_ledger(agent, technical_success, task, project, resultado.get("error") or "")
     write_history(agent, technical_success, task, resultado.get("error") or "")
+
+    # Assinatura RAG + file registry (apenas em caso de sucesso)
+    if technical_success:
+        write_rag_signature(agent, task, resultado["content"], project)
+        if files:
+            update_file_registry(files, agent, project)
 
     # Output
     if technical_success:
@@ -426,11 +547,15 @@ def main() -> None:
     parser.add_argument("--project", "-p", metavar="PROJETO",
                         default="RubberDuckFactory",
                         help="Nome do projeto para o ledger (padrao: RubberDuckFactory)")
+    parser.add_argument("--files",   "-f", metavar="ARQ[,ARQ]",
+                        help="Arquivos tocados pela tarefa, separados por vírgula "
+                             "(atualiza file_registry com autoria do agente)")
 
     args = parser.parse_args()
 
     if args.agent and args.task:
-        run_task(args.agent, args.task, args.project)
+        files = [f.strip() for f in args.files.split(",")] if args.files else None
+        run_task(args.agent, args.task, args.project, files)
     elif args.agent or args.task:
         parser.error("Use --agent e --task juntos, ou nenhum (modo hello-world).")
     else:
