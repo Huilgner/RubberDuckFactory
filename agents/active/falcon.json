@@ -5,12 +5,12 @@
   "model": "google/gemini-2.5-flash-lite",
   "ruleset_version": "DOC-102",
   "evolution": "Stable",
-  "success_rate": 100,
+  "success_rate": 100.0,
   "status": "active",
   "pontos": {
     "externos": 0,
     "internos": 0
   },
-  "tasks_completed": 0,
+  "tasks_completed": 3,
   "tasks_failed": 0
 }
