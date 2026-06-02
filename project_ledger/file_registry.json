@@ -1,5 +1,142 @@
 {
   "_schema": "1.0",
   "_description": "Registro de propriedade e histórico de edições por arquivo. Atualizado pelos hooks post_file_registry.py e agent_runner.py --files.",
-  "files": {}
+  "files": {
+    "[ext:SIGO_FENIX] server/pcp-db.ts": {
+      "owner": "Chen",
+      "created_by": "Chen",
+      "created_ts": "2026-05-27T19:19:06Z",
+      "last_edited_by": "Chen",
+      "last_edit_ts": "2026-05-27T19:19:06Z",
+      "last_model": "deepseek/deepseek-chat",
+      "last_tier": 2,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Chen"
+      ],
+      "_note": "Data layer TypeScript - Drizzle ORM + tRPC. Tarefa: agent_runner task 2026-05-27T19:19:06Z"
+    },
+    "[ext:SIGO_FENIX] drizzle/schema.ts": {
+      "owner": "Chen",
+      "created_by": "Chen",
+      "created_ts": "2026-05-27T19:19:06Z",
+      "last_edited_by": "Chen",
+      "last_edit_ts": "2026-05-27T19:19:06Z",
+      "last_model": "deepseek/deepseek-chat",
+      "last_tier": 2,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Chen"
+      ],
+      "_note": "Schema Drizzle ORM (adicoes PCP). Tarefa: agent_runner task 2026-05-27T19:19:06Z"
+    },
+    "[ext:SIGO_FENIX] server/routers.ts": {
+      "owner": "Chen",
+      "created_by": "Chen",
+      "created_ts": "2026-05-27T19:19:06Z",
+      "last_edited_by": "Chen",
+      "last_edit_ts": "2026-05-27T19:19:06Z",
+      "last_model": "deepseek/deepseek-chat",
+      "last_tier": 2,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Chen"
+      ],
+      "_note": "tRPC router - rotas PCP. Tarefa: agent_runner task 2026-05-27T19:19:06Z"
+    },
+    "[ext:SIGO_FENIX] [python-ref] server/pcp_backend_fastapi.py": {
+      "owner": "Chen",
+      "created_by": "Chen",
+      "created_ts": "2026-05-27T19:10:22Z",
+      "last_edited_by": "Chen",
+      "last_edit_ts": "2026-05-27T19:10:22Z",
+      "last_model": "deepseek/deepseek-chat",
+      "last_tier": 2,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Chen"
+      ],
+      "_note": "Backend Python/FastAPI/SQLAlchemy (referencia - stack real e TypeScript/tRPC). Tarefa: agent_runner task 2026-05-27T19:10:22Z"
+    },
+    "[ext:SIGO_FENIX] client/src/pages/PcpPainel.tsx": {
+      "owner": "Nova",
+      "created_by": "Nova",
+      "created_ts": "2026-05-27T20:11:05Z",
+      "last_edited_by": "Nova",
+      "last_edit_ts": "2026-05-27T20:11:05Z",
+      "last_model": "google/gemini-2.5-flash",
+      "last_tier": 2,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Nova"
+      ],
+      "_note": "Pagina React PCP Painel. Tarefa: agent_runner task 2026-05-27T20:11:05Z"
+    },
+    "[ext:SIGO_FENIX] client/src/pages/ChaoDeFabrica.tsx": {
+      "owner": "Nova",
+      "created_by": "Nova",
+      "created_ts": "2026-05-27T20:11:05Z",
+      "last_edited_by": "Nova",
+      "last_edit_ts": "2026-05-27T20:11:05Z",
+      "last_model": "google/gemini-2.5-flash",
+      "last_tier": 2,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Nova"
+      ],
+      "_note": "Pagina React Chao de Fabrica (Kanban). Tarefa: agent_runner task 2026-05-27T20:11:05Z"
+    },
+    "[ext:SIGO_FENIX] client/src/pages/Expedicao.tsx": {
+      "owner": "Nova",
+      "created_by": "Nova",
+      "created_ts": "2026-05-27T20:11:05Z",
+      "last_edited_by": "Nova",
+      "last_edit_ts": "2026-05-27T20:11:05Z",
+      "last_model": "google/gemini-2.5-flash",
+      "last_tier": 2,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Nova"
+      ],
+      "_note": "Pagina React Expedicao. Tarefa: agent_runner task 2026-05-27T20:11:05Z"
+    },
+    "[ext:SIGO_FENIX] docs/SIGO_FENIX_overview.md": {
+      "owner": "Falcon",
+      "created_by": "Falcon",
+      "created_ts": "2026-05-26T19:53:37Z",
+      "last_edited_by": "Falcon",
+      "last_edit_ts": "2026-05-26T19:53:37Z",
+      "last_model": "google/gemini-2.5-flash-lite",
+      "last_tier": 1,
+      "last_project": "SIGO_FENIX",
+      "edit_count": 1,
+      "co_authors": [
+        "Falcon"
+      ],
+      "_note": "Documento Markdown descrevendo objetivo, usuarios e estado de implementacao do SIGO_FENIX. Tarefa: agent_runner task 2026-05-26T19:53:37Z"
+    },
+    "server.py": {
+      "owner": "Chen",
+      "created_by": "Chen",
+      "created_ts": "2026-06-02T15:09:28Z",
+      "edit_count": 2,
+      "co_authors": [
+        "Chen"
+      ],
+      "last_edited_by": "Chen",
+      "last_edit_ts": "2026-06-02T15:14:20Z",
+      "last_model": "deepseek/deepseek-chat",
+      "last_tier": 2,
+      "last_project": "RubberDuckFactory_SelfHealing"
+    }
+  },
+  "_last_updated": "2026-05-29T00:02:00Z",
+  "_retroactive_note": "Entradas de 2026-05-27/26 inseridas retroativamente em 2026-05-29 pelo Arquiteto. Originalmente as tarefas foram executadas sem --files flag."
 }

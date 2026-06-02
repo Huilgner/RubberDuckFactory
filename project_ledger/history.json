@@ -144,6 +144,464 @@
       "type": "FREELANKER_HIRE",
       "specialty": "Payment Specialist",
       "task": "Verify Payment Gateway Security"
+    },
+    {
+      "timestamp": "2026-05-26T03:24:55.006380+00:00",
+      "type": "COST_RECORD",
+      "agent": "Falcon",
+      "model": "google/gemini-2.5-flash-lite",
+      "task": "List 3 naming conventions for Python files in a backend project. Be very brief —",
+      "tokens": {
+        "prompt": 161,
+        "completion": 53,
+        "total": 214
+      },
+      "cost_usd": 2.798e-05
+    },
+    {
+      "timestamp": "2026-05-26T03:24:55.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "List 3 naming conventions for Python files in a backend project. Be very brief — one line per convention."
+    },
+    {
+      "timestamp": "2026-05-26T03:32:53.851815+00:00",
+      "type": "COST_RECORD",
+      "agent": "Falcon",
+      "model": "google/gemini-2.5-flash-lite",
+      "task": "List 3 naming conventions for Python files in a backend project. One line per co",
+      "tokens": {
+        "prompt": 159,
+        "completion": 45,
+        "total": 204
+      },
+      "cost_usd": 2.543e-05
+    },
+    {
+      "timestamp": "2026-05-26T03:32:53.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "List 3 naming conventions for Python files in a backend project. One line per convention."
+    },
+    {
+      "timestamp": "2026-05-26T19:40:42.659Z",
+      "type": "HUMAN_PROMPT",
+      "prompt": "Create the new client portal with secure payment gateway."
+    },
+    {
+      "timestamp": "2026-05-26T19:40:42.687Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "Update README with new project specs"
+    },
+    {
+      "timestamp": "2026-05-26T19:40:42.704Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Nova",
+      "task": "Implement Dashboard UI component"
+    },
+    {
+      "timestamp": "2026-05-26T19:40:42.720Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Chen",
+      "task": "Optimize MongoDB aggregation pipelines"
+    },
+    {
+      "timestamp": "2026-05-26T19:40:42.732Z",
+      "type": "FREELANKER_HIRE",
+      "specialty": "Payment Specialist",
+      "task": "Verify Payment Gateway Security"
+    },
+    {
+      "timestamp": "2026-05-26T19:51:09.785043+00:00",
+      "type": "COST_RECORD",
+      "agent": "Quill",
+      "model": "deepseek/deepseek-v4-flash:free",
+      "task": "Leia os arquivos abaixo e produza um documento Markdown explicando o objetivo do",
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "cost_usd": 0
+    },
+    {
+      "timestamp": "2026-05-26T19:51:09.000Z",
+      "type": "TASK_FAILURE",
+      "agent": "Quill",
+      "task": "Leia os arquivos abaixo e produza um documento Markdown explicando o objetivo do projeto SIGO_FENIX, o que ele faz, quem são os usuários, quais problemas resolve e qual o estado atual de implementação",
+      "reason": "HTTP 429: {\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"deepseek/deepseek-v4-flash:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to"
+    },
+    {
+      "timestamp": "2026-05-26T19:53:37.887558+00:00",
+      "type": "COST_RECORD",
+      "agent": "Falcon",
+      "model": "google/gemini-2.5-flash-lite",
+      "task": "Leia os arquivos abaixo e produza um documento Markdown explicando o objetivo do",
+      "tokens": {
+        "prompt": 671,
+        "completion": 924,
+        "total": 1595
+      },
+      "cost_usd": 0.00032753
+    },
+    {
+      "timestamp": "2026-05-26T19:53:37.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "Leia os arquivos abaixo e produza um documento Markdown explicando o objetivo do projeto SIGO_FENIX, o que ele faz, quem sao os usuarios, quais problemas resolve e qual o estado atual de implementacao"
+    },
+    {
+      "timestamp": "2026-05-27T19:10:22.441284+00:00",
+      "type": "COST_RECORD",
+      "agent": "Chen",
+      "model": "deepseek/deepseek-chat",
+      "task": "Gere o backend completo do modulo PCP para o projeto SIGO_FENIX (Python 3.11 / F",
+      "tokens": {
+        "prompt": 1810,
+        "completion": 3572,
+        "total": 5382
+      },
+      "cost_usd": 0.0044179
+    },
+    {
+      "timestamp": "2026-05-27T19:10:22.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Chen",
+      "task": "Gere o backend completo do modulo PCP para o projeto SIGO_FENIX (Python 3.11 / FastAPI / SQLAlchemy). Produza tres arquivos completos e prontos para uso.\n\n=== CONTEXTO DO PROJETO ===\nO projeto ja exis"
+    },
+    {
+      "timestamp": "2026-05-27T19:19:06.204786+00:00",
+      "type": "COST_RECORD",
+      "agent": "Chen",
+      "model": "deepseek/deepseek-chat",
+      "task": "Gere o data layer TypeScript do modulo PCP para o projeto SIGO_FENIX. Stack: Dri",
+      "tokens": {
+        "prompt": 2014,
+        "completion": 3864,
+        "total": 5878
+      },
+      "cost_usd": 0.00479418
+    },
+    {
+      "timestamp": "2026-05-27T19:19:06.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Chen",
+      "task": "Gere o data layer TypeScript do modulo PCP para o projeto SIGO_FENIX. Stack: Drizzle ORM (drizzle-orm/mysql-core) + tRPC. Produza tres blocos de codigo.\n\n=== BLOCO 1: Adicoes ao drizzle/schema.ts ===\n"
+    },
+    {
+      "timestamp": "2026-05-27T20:11:05.177271+00:00",
+      "type": "COST_RECORD",
+      "agent": "Nova",
+      "model": "google/gemini-2.5-flash",
+      "task": "Gere as paginas React do modulo PCP para o projeto SIGO_FENIX. Stack: React 19, ",
+      "tokens": {
+        "prompt": 1586,
+        "completion": 4000,
+        "total": 5586
+      },
+      "cost_usd": 0.0026379
+    },
+    {
+      "timestamp": "2026-05-27T20:11:05.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Nova",
+      "task": "Gere as paginas React do modulo PCP para o projeto SIGO_FENIX. Stack: React 19, TypeScript, tRPC, Tailwind CSS, ShadCN UI, Lucide icons, wouter (routing). Sem biblioteca DnD — usar HTML5 nativo (ondra"
+    },
+    {
+      "timestamp": "2026-05-31T23:46:13.818Z",
+      "type": "HUMAN_PROMPT",
+      "prompt": "Create the new client portal with secure payment gateway."
+    },
+    {
+      "timestamp": "2026-05-31T23:46:13.853Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "Update README with new project specs"
+    },
+    {
+      "timestamp": "2026-05-31T23:46:13.876Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Nova",
+      "task": "Implement Dashboard UI component"
+    },
+    {
+      "timestamp": "2026-05-31T23:46:13.897Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Chen",
+      "task": "Optimize MongoDB aggregation pipelines"
+    },
+    {
+      "timestamp": "2026-05-31T23:46:13.910Z",
+      "type": "FREELANKER_HIRE",
+      "specialty": "Payment Specialist",
+      "task": "Verify Payment Gateway Security"
+    },
+    {
+      "timestamp": "2026-05-31T23:51:09.278Z",
+      "type": "HUMAN_PROMPT",
+      "prompt": "Create the new client portal with secure payment gateway."
+    },
+    {
+      "timestamp": "2026-05-31T23:51:09.304Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "Update README with new project specs"
+    },
+    {
+      "timestamp": "2026-05-31T23:51:09.319Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Nova",
+      "task": "Implement Dashboard UI component"
+    },
+    {
+      "timestamp": "2026-05-31T23:51:09.339Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Chen",
+      "task": "Optimize MongoDB aggregation pipelines"
+    },
+    {
+      "timestamp": "2026-05-31T23:51:09.352Z",
+      "type": "FREELANKER_HIRE",
+      "specialty": "Payment Specialist",
+      "task": "Verify Payment Gateway Security"
+    },
+    {
+      "timestamp": "2026-06-01T00:49:51.577Z",
+      "type": "HUMAN_PROMPT",
+      "prompt": "Create the new client portal with secure payment gateway."
+    },
+    {
+      "timestamp": "2026-06-01T00:49:51.617Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "Update README with new project specs"
+    },
+    {
+      "timestamp": "2026-06-01T00:49:51.642Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Nova",
+      "task": "Implement Dashboard UI component"
+    },
+    {
+      "timestamp": "2026-06-01T00:49:51.665Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Chen",
+      "task": "Optimize MongoDB aggregation pipelines"
+    },
+    {
+      "timestamp": "2026-06-01T00:49:51.680Z",
+      "type": "FREELANKER_HIRE",
+      "specialty": "Payment Specialist",
+      "task": "Verify Payment Gateway Security"
+    },
+    {
+      "timestamp": "2026-06-01T00:58:46.223002+00:00",
+      "type": "COST_RECORD",
+      "agent": "Orion",
+      "model": "google/gemini-2.5-flash",
+      "task": "Apresente-se brevemente e liste suas principais capacidades para o projeto contr",
+      "tokens": {
+        "prompt": 384,
+        "completion": 285,
+        "total": 669
+      },
+      "cost_usd": 0.0002286
+    },
+    {
+      "timestamp": "2026-06-01T00:58:46.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orion",
+      "task": "Apresente-se brevemente e liste suas principais capacidades para o projeto controle_obras: app Android Offline-First para controle de cronograma e fluxo de caixa de obras civis."
+    },
+    {
+      "timestamp": "2026-06-01T01:04:18.656165+00:00",
+      "type": "COST_RECORD",
+      "agent": "Orion",
+      "model": "google/gemini-2.5-flash",
+      "task": "Gere os arquivos Kotlin completos para a camada de dados (Room Database) do app ",
+      "tokens": {
+        "prompt": 843,
+        "completion": 2479,
+        "total": 3322
+      },
+      "cost_usd": 0.00161385
+    },
+    {
+      "timestamp": "2026-06-01T01:04:18.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orion",
+      "task": "Gere os arquivos Kotlin completos para a camada de dados (Room Database) do app controle_obras. Necessário: (1) Sealed classes / enums: TipoFase (FUNDACAO, ESTRUTURA, FECHAMENTO, COBERTURA, ELETRICA, "
+    },
+    {
+      "timestamp": "2026-06-01T01:05:46.134818+00:00",
+      "type": "COST_RECORD",
+      "agent": "Orion",
+      "model": "google/gemini-2.5-flash",
+      "task": "Gere os UseCases de domínio para o app controle_obras. Pacote: com.obras.control",
+      "tokens": {
+        "prompt": 907,
+        "completion": 3240,
+        "total": 4147
+      },
+      "cost_usd": 0.00208005
+    },
+    {
+      "timestamp": "2026-06-01T01:05:46.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orion",
+      "task": "Gere os UseCases de domínio para o app controle_obras. Pacote: com.obras.controle.domain.usecase. Use Result<T> para retornos. As fases são identificadas pelo ordinal do enum TipoFase (FUNDACAO=0..ACA"
+    },
+    {
+      "timestamp": "2026-06-01T01:11:46.964643+00:00",
+      "type": "COST_RECORD",
+      "agent": "Chen",
+      "model": "deepseek/deepseek-chat",
+      "task": "Gere o backend REST para o app controle_obras. Stack: Node.js + Express + TypeSc",
+      "tokens": {
+        "prompt": 456,
+        "completion": 3066,
+        "total": 3522
+      },
+      "cost_usd": 0.00349572
+    },
+    {
+      "timestamp": "2026-06-01T01:11:46.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Chen",
+      "task": "Gere o backend REST para o app controle_obras. Stack: Node.js + Express + TypeScript + PostgreSQL (node-postgres). Necessário: (1) docker-compose.yml com serviços api (porta 3000) e postgres (porta 54"
+    },
+    {
+      "timestamp": "2026-06-01T01:17:45.354580+00:00",
+      "type": "COST_RECORD",
+      "agent": "Orion",
+      "model": "google/gemini-2.5-flash",
+      "task": "Gere o arquivo Repositories.kt (pacote com.obras.controle.data.repository) com 5",
+      "tokens": {
+        "prompt": 769,
+        "completion": 1545,
+        "total": 2314
+      },
+      "cost_usd": 0.00104235
+    },
+    {
+      "timestamp": "2026-06-01T01:17:45.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orion",
+      "task": "Gere o arquivo Repositories.kt (pacote com.obras.controle.data.repository) com 5 repositórios para o app controle_obras. Regras: Flow<T> para leituras reativas; suspend fun retornando Result<T> para e"
+    },
+    {
+      "timestamp": "2026-06-01T01:27:11.602951+00:00",
+      "type": "COST_RECORD",
+      "agent": "Orion",
+      "model": "google/gemini-2.5-flash",
+      "task": "Gere SyncWorker.kt (pacote com.obras.controle.data.sync) para WorkManager. O wor",
+      "tokens": {
+        "prompt": 634,
+        "completion": 1517,
+        "total": 2151
+      },
+      "cost_usd": 0.0010053
+    },
+    {
+      "timestamp": "2026-06-01T01:27:11.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orion",
+      "task": "Gere SyncWorker.kt (pacote com.obras.controle.data.sync) para WorkManager. O worker sincroniza dados locais Room com o backend REST em C:\\controle_obras\\backend (porta 3000). Necessário: (1) SyncWorke"
+    },
+    {
+      "timestamp": "2026-06-01T01:28:12.225907+00:00",
+      "type": "COST_RECORD",
+      "agent": "Orion",
+      "model": "google/gemini-2.5-flash",
+      "task": "Gere as telas Jetpack Compose para o app controle_obras. Padrão MVI: ViewModel c",
+      "tokens": {
+        "prompt": 670,
+        "completion": 4000,
+        "total": 4670
+      },
+      "cost_usd": 0.0025005
+    },
+    {
+      "timestamp": "2026-06-01T01:28:12.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orion",
+      "task": "Gere as telas Jetpack Compose para o app controle_obras. Padrão MVI: ViewModel com StateFlow<UiState>, sealed class para UiState. Pacote base: com.obras.controle.presentation. Necessário: (1) ListaObr"
+    },
+    {
+      "timestamp": "2026-06-02T15:00:50.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orchestrator",
+      "task": "Spawn/Evolve agent Neo with model google/gemini-2.5-flash-lite and ruleset SRE-001 via gene selection."
+    },
+    {
+      "timestamp": "2026-06-02T15:01:19.841061+00:00",
+      "type": "COST_RECORD",
+      "agent": "Falcon",
+      "model": "google/gemini-2.5-flash-lite",
+      "task": "Qual é o slogan do Jina AI?",
+      "tokens": {
+        "prompt": 148,
+        "completion": 20,
+        "total": 168
+      },
+      "cost_usd": 1.71e-05
+    },
+    {
+      "timestamp": "2026-06-02T15:01:19.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "Qual é o slogan do Jina AI?"
+    },
+    {
+      "timestamp": "2026-06-02T15:07:18.816462+00:00",
+      "type": "COST_RECORD",
+      "agent": "Falcon",
+      "model": "google/gemini-2.5-flash-lite",
+      "task": "Qual é o slogan do Jina AI?",
+      "tokens": {
+        "prompt": 234,
+        "completion": 7,
+        "total": 241
+      },
+      "cost_usd": 1.965e-05
+    },
+    {
+      "timestamp": "2026-06-02T15:07:18.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Falcon",
+      "task": "Qual é o slogan do Jina AI?"
+    },
+    {
+      "timestamp": "2026-06-02T15:08:32.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orchestrator",
+      "task": "Inter-agent negotiation completed between Chen and Nova on topic: 'Definir payload do POST /api/tasks'."
+    },
+    {
+      "timestamp": "2026-06-02T15:14:22.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Orchestrator",
+      "task": "Self-healing loop completed. 1 security issues resolved. Remaining issues: 0."
+    },
+    {
+      "timestamp": "2026-06-02T15:56:20.918601+00:00",
+      "type": "COST_RECORD",
+      "agent": "Nova",
+      "model": "google/gemini-2.5-flash",
+      "task": "Crie uma página moderna de Hello World em HTML com CSS minimalista e elegante in",
+      "tokens": {
+        "prompt": 156,
+        "completion": 460,
+        "total": 616
+      },
+      "cost_usd": 0.0002994
+    },
+    {
+      "timestamp": "2026-06-02T15:56:20.000Z",
+      "type": "TASK_SUCCESS",
+      "agent": "Nova",
+      "task": "Crie uma página moderna de Hello World em HTML com CSS minimalista e elegante incorporado."
     }
   ],
   "milestones": []

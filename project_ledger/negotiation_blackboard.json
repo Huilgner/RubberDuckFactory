@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-06-02T15:08:32.080140+00:00",
+  "topic": "Definir payload do POST /api/tasks",
+  "participants": [
+    "Chen",
+    "Nova"
+  ],
+  "turns": 1,
+  "negotiation_log": [
+    {
+      "turn": 1,
+      "author": "Chen",
+      "content": "Proposed POST /api/tasks payload structure:\n\n```json\n{\n  \"title\": \"string (required, max 120 chars)\",\n  \"description\": \"string (optional, max 1000 chars)\",\n  \"due_date\": \"ISO8601 timestamp (optional)\",\n  \"priority\": \"enum [low, medium, high] (default: medium)\",\n  \"labels\": \"array of string IDs (optional, max 5)\",\n  \"assignee_id\": \"string UUID (optional)\"\n}\n```\n\nTradeoffs considered:\n1. Required vs optional fields - Only title is required for minimal viable creation\n2. Field limits - Prevents abuse while covering most use cases\n3. Timestamp format - ISO8601 is unambiguous and widely supported\n4. Enums vs free text - For priority, enums ensure consistency\n5. Reference IDs - Using IDs for labels/assignee maintains data integrity\n\nAlternative: Include full nested objects instead of IDs, but this would:\n- Increase payload size\n- Require complex validation\n- Create consistency challenges"
+    },
+    {
+      "turn": 1,
+      "author": "Nova",
+      "content": "The proposal is largely sound.\n\n**Critique:**\n\n1.  `due_date`: \"ISO8601 timestamp\" is ambiguous. Specify format, e.g., `YYYY-MM-DDTHH:mm:ssZ` for UTC or `YYYY-MM-DDTHH:mm:ss+/-HH:MM` for timezone-aware. Recommend UTC for consistency.\n2.  `labels`: \"array of string IDs\" is vague. Specify UUIDs if that's the expected format for consistency with `assignee_id`.\n3.  `assignee_id`: \"string UUID\" is good.\n\n**Counter-proposal:**\n\n```json\n{\n  \"title\": \"string (required, max 120 chars)\",\n  \"description\": \"string (optional, max 1000 chars)\",\n  \"due_date\": \"string (optional, ISO8601 UTC format: YYYY-MM-DDTHH:mm:ssZ)\",\n  \"priority\": \"enum [low, medium, high] (default: medium)\",\n  \"labels\": \"array of string UUIDs (optional, max 5)\",\n  \"assignee_id\": \"string UUID (optional)\"\n}\n```"
+    }
+  ],
+  "consensus_proposal": "The proposal is largely sound.\n\n**Critique:**\n\n1.  `due_date`: \"ISO8601 timestamp\" is ambiguous. Specify format, e.g., `YYYY-MM-DDTHH:mm:ssZ` for UTC or `YYYY-MM-DDTHH:mm:ss+/-HH:MM` for timezone-aware. Recommend UTC for consistency.\n2.  `labels`: \"array of string IDs\" is vague. Specify UUIDs if that's the expected format for consistency with `assignee_id`.\n3.  `assignee_id`: \"string UUID\" is good.\n\n**Counter-proposal:**\n\n```json\n{\n  \"title\": \"string (required, max 120 chars)\",\n  \"description\": \"string (optional, max 1000 chars)\",\n  \"due_date\": \"string (optional, ISO8601 UTC format: YYYY-MM-DDTHH:mm:ssZ)\",\n  \"priority\": \"enum [low, medium, high] (default: medium)\",\n  \"labels\": \"array of string UUIDs (optional, max 5)\",\n  \"assignee_id\": \"string UUID (optional)\"\n}\n```"
+}

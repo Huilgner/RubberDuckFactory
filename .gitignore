@@ -38,3 +38,6 @@ project_ledger/hooks_audit.log
 .venv/
 venv/
 *.egg-info/
+
+# Blueprints (dados de projetos executados)
+docs/blueprints/
