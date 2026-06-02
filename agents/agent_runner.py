@@ -62,6 +62,7 @@ MODEL_MAX_TOKENS: dict[str, int] = {
     "deepseek/deepseek-chat":          4000,
     "deepseek/deepseek-v4-flash:free": 2000,
     "anthropic/claude-opus-4":         4000,
+    "anthropic/claude-sonnet-4-5":     6000,
 }
 DEFAULT_MAX_TOKENS = 3000
 
@@ -457,7 +458,64 @@ def write_rag_signature(agent: dict, task: str, response: str, project: str) -> 
         print(f"  [WARNING] RAG signature falhou: {e}")
 
 
-def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None) -> None:
+def retrieve_rag_context(agent_name: str, query: str) -> str:
+    """Busca fragmentos de memória relevantes no ChromaDB local."""
+    try:
+        import chromadb
+        from chromadb.config import Settings as ChromaSettings
+        from sentence_transformers import SentenceTransformer
+
+        db_path = str(ROOT_DIR / "memory" / "chroma_db")
+        chroma_cli = chromadb.PersistentClient(
+            path=db_path,
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        query_embedding = encoder.encode(query).tolist()
+
+        docs = []
+
+        # 1. Tenta recuperar do squad_knowledge
+        try:
+            collection = chroma_cli.get_collection(name="squad_knowledge")
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=3,
+                include=["documents", "distances"]
+            )
+            if results and results.get("documents") and results["documents"][0]:
+                for doc, dist in zip(results["documents"][0], results["distances"][0]):
+                    if dist < 0.6:  # Similaridade razoável (distância cosseno)
+                        docs.append(f"- [Memória Compartilhada] {doc}")
+        except Exception:
+            pass
+
+        # 2. Tenta recuperar da memória específica do agente
+        agent_collection_name = f"{agent_name.lower()}_memory"
+        try:
+            collection = chroma_cli.get_collection(name=agent_collection_name)
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=2,
+                include=["documents", "distances"]
+            )
+            if results and results.get("documents") and results["documents"][0]:
+                for doc, dist in zip(results["documents"][0], results["distances"][0]):
+                    if dist < 0.6:
+                        docs.append(f"- [Memória do Agente] {doc}")
+        except Exception:
+            pass
+
+        if docs:
+            header = "\n" + "=" * 60 + "\n[CONTEXTO DE MEMÓRIA RECUPERADO (RAG)]\n"
+            footer = "\n" + "=" * 60 + "\n"
+            return header + "\n".join(docs) + footer
+    except Exception as e:
+        print(f"  [WARNING] Falha ao recuperar contexto RAG: {e}")
+    return ""
+
+
+def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None, use_rag: bool = False) -> None:
     """Modo tarefa: delega briefing especifico a um agente e registra tudo."""
     agent     = load_agent(agent_name)
     nome      = agent.get("nome", "?")
@@ -472,6 +530,15 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
         print("  Nenhuma tarefa nova sem aprovacao explicita do Arquiteto.")
         sys.exit(1)
 
+    rag_context = ""
+    if use_rag:
+        print(f"[RAG] Procurando memórias similares para grounding...")
+        rag_context = retrieve_rag_context(agent_name, task)
+        if rag_context:
+            print(f"[RAG] Contexto semântico injetado.")
+
+    full_task = rag_context + task if rag_context else task
+
     print("=" * 60)
     print(f"  RubberDuckFactory -- Task Runner")
     print(f"  Agente  : {nome} (Tier {tier} | {evolution} | sr={sr}%)")
@@ -479,12 +546,15 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
     print(f"  Projeto : {project or 'n/a'}")
     print("=" * 60)
     print()
+    if rag_context:
+        print(rag_context.strip())
+        print()
     print(f"BRIEFING:\n{task}")
     print()
     print(f"Chamando {nome}...")
     print()
 
-    resultado = call_agent(agent, task)
+    resultado = call_agent(agent, full_task)
     technical_success = resultado["success"]
 
     # Custo
@@ -550,12 +620,14 @@ def main() -> None:
     parser.add_argument("--files",   "-f", metavar="ARQ[,ARQ]",
                         help="Arquivos tocados pela tarefa, separados por vírgula "
                              "(atualiza file_registry com autoria do agente)")
+    parser.add_argument("--rag", action="store_true",
+                        help="Ativa a recuperação de contexto semântico (RAG)")
 
     args = parser.parse_args()
 
     if args.agent and args.task:
         files = [f.strip() for f in args.files.split(",")] if args.files else None
-        run_task(args.agent, args.task, args.project, files)
+        run_task(args.agent, args.task, args.project, files, args.rag)
     elif args.agent or args.task:
         parser.error("Use --agent e --task juntos, ou nenhum (modo hello-world).")
     else:
