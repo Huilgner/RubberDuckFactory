@@ -515,9 +515,253 @@ def retrieve_rag_context(agent_name: str, query: str) -> str:
     return ""
 
 
-def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None, use_rag: bool = False) -> None:
+def check_semantic_cache(agent_name: str, task: str) -> str | None:
+    """Busca se a tarefa exata ou muito similar já foi respondida com sucesso."""
+    try:
+        import chromadb
+        from chromadb.config import Settings as ChromaSettings
+        from sentence_transformers import SentenceTransformer
+
+        db_path = str(ROOT_DIR / "memory" / "chroma_db")
+        chroma_cli = chromadb.PersistentClient(
+            path=db_path,
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        # Cria ou obtém a coleção
+        collection = chroma_cli.get_or_create_collection(
+            name="semantic_cache",
+            metadata={"hnsw:space": "cosine"},
+        )
+        if collection.count() == 0:
+            return None
+
+        encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        query_embedding = encoder.encode(task).tolist()
+
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=1,
+            where={"agent": agent_name},
+            include=["documents", "distances"]
+        )
+
+        if results and results.get("documents") and results["documents"][0]:
+            doc = results["documents"][0][0]
+            dist = results["distances"][0][0]
+            if dist < 0.08:  # Limite rígido para garantir que a tarefa é idêntica
+                return doc
+    except Exception as e:
+        print(f"  [WARNING] Falha na busca de cache semântico: {e}")
+    return None
+
+
+def store_semantic_cache(agent_name: str, task: str, response: str, project: str) -> None:
+    """Armazena o resultado de uma tarefa bem-sucedida no cache semântico."""
+    try:
+        import chromadb
+        from chromadb.config import Settings as ChromaSettings
+        from sentence_transformers import SentenceTransformer
+
+        db_path = str(ROOT_DIR / "memory" / "chroma_db")
+        chroma_cli = chromadb.PersistentClient(
+            path=db_path,
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        collection = chroma_cli.get_or_create_collection(
+            name="semantic_cache",
+            metadata={"hnsw:space": "cosine"},
+        )
+
+        encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        embedding = encoder.encode(task).tolist()
+
+        ts = _ts()
+        doc_id = f"cache_{agent_name.lower()}_{ts.replace(':', '').replace('-', '').replace('+', '')[:17]}"
+
+        collection.add(
+            ids=[doc_id],
+            embeddings=[embedding],
+            documents=[response],
+            metadatas=[{
+                "agent": agent_name,
+                "task": task[:500],
+                "project": project,
+                "timestamp": ts,
+            }]
+        )
+        print(f"  [cache_semantico] ✅ Resultado de {agent_name} cacheado com sucesso (id={doc_id})")
+    except Exception as e:
+        print(f"  [WARNING] Falha ao gravar no cache semântico: {e}")
+
+
+def is_task_simple(task: str) -> bool:
+    """Verifica se uma tarefa é trivial (ex: saudações, tarefas muito curtas)."""
+    words = task.strip().split()
+    if len(words) < 15:
+        return True
+    
+    simple_patterns = [
+        r"^\s*ola\b", r"^\s*oi\b", r"^\s*hello\b", r"^\s*hi\b",
+        r"apresente-se", r"quem e voce", r"test", r"teste"
+    ]
+    import re
+    if any(re.search(pat, task, re.IGNORECASE) for pat in simple_patterns):
+        return True
+    
+    return False
+
+
+def execute_heuristic_task(task: str) -> dict:
+    """Executa tarefas locais simples sem uso de LLM."""
+    import subprocess
+    task_lower = task.lower().strip()
+    
+    # 1. Formatação de arquivos
+    if "format" in task_lower:
+        words = task.split()
+        file_to_format = None
+        for w in words:
+            if "." in w:
+                file_to_format = w
+                break
+        if file_to_format:
+            filepath = ROOT_DIR / file_to_format
+            if filepath.exists():
+                ext = filepath.suffix.lower()
+                cmd = []
+                if ext == ".py":
+                    cmd = ["black", str(filepath)]
+                elif ext in (".html", ".css", ".js", ".json"):
+                    cmd = ["npx", "prettier", "--write", str(filepath)]
+                
+                if cmd:
+                    try:
+                        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                        if res.returncode == 0:
+                            return {
+                                "success": True,
+                                "content": f"Arquivo {file_to_format} formatado localmente com sucesso usando: {' '.join(cmd)}.",
+                                "finish_reason": "local",
+                                "prompt_tokens": 0, "completion_tokens": 0
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "error": f"Formatador falhou: {res.stderr or res.stdout}",
+                                "finish_reason": "error",
+                                "prompt_tokens": 0, "completion_tokens": 0
+                            }
+                    except Exception as e:
+                        return {
+                            "success": False,
+                            "error": f"Erro ao executar formatador: {e}",
+                            "finish_reason": "error",
+                            "prompt_tokens": 0, "completion_tokens": 0
+                        }
+            return {
+                "success": False,
+                "error": f"Arquivo '{file_to_format}' não encontrado.",
+                "finish_reason": "error",
+                "prompt_tokens": 0, "completion_tokens": 0
+            }
+    
+    # 2. Limpeza básica de logs
+    if "clean logs" in task_lower or "clear logs" in task_lower:
+        log_file = ROOT_DIR / "project_ledger" / "hooks_audit.log"
+        if log_file.exists():
+            try:
+                log_file.write_text("", encoding="utf-8")
+                return {
+                    "success": True,
+                    "content": "Log hooks_audit.log limpo com sucesso localmente.",
+                    "finish_reason": "local",
+                    "prompt_tokens": 0, "completion_tokens": 0
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "finish_reason": "error",
+                    "prompt_tokens": 0, "completion_tokens": 0
+                }
+    
+    # 3. Executar comando local seguro (verificado)
+    if task.startswith("LOCAL_RUN:"):
+        cmd_str = task[10:].strip()
+        allowed = ["git status", "git diff", "bandit", "python -m py_compile"]
+        if any(cmd_str.startswith(a) for a in allowed):
+            try:
+                res = subprocess.run(cmd_str.split(), capture_output=True, text=True, timeout=15)
+                return {
+                    "success": res.returncode == 0,
+                    "content": res.stdout or res.stderr,
+                    "finish_reason": "local",
+                    "prompt_tokens": 0, "completion_tokens": 0
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "finish_reason": "error",
+                    "prompt_tokens": 0, "completion_tokens": 0
+                }
+        return {
+            "success": False,
+            "error": f"Comando local não autorizado. Autorizados: {allowed}",
+            "finish_reason": "error",
+            "prompt_tokens": 0, "completion_tokens": 0
+        }
+    
+    return {
+        "success": False,
+        "error": f"Tarefa heurística não reconhecida. Use: 'format <arquivo>', 'clean logs', ou 'LOCAL_RUN: <comando>'",
+        "finish_reason": "error",
+        "prompt_tokens": 0, "completion_tokens": 0
+    }
+
+
+def parse_and_execute_dsl(dsl_text: str) -> list[str]:
+    """Parseia a Mini-DSL e escreve os arquivos contidos."""
+    import re
+    written_files = []
+    pattern = r"\[FILE:\s*(.+?)\]\s*\[CONTENT\](.*?)\[END_CONTENT\]"
+    matches = re.findall(pattern, dsl_text, re.DOTALL)
+    
+    for filename, content in matches:
+        filename = filename.strip()
+        content = content.strip()
+        filepath = ROOT_DIR / filename
+        try:
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content, encoding="utf-8")
+            written_files.append(filename)
+        except Exception as e:
+            print(f"  [WARNING] Erro ao escrever arquivo {filename} via DSL: {e}")
+            
+    return written_files
+
+
+def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None, use_rag: bool = False, use_dsl: bool = False) -> None:
     """Modo tarefa: delega briefing especifico a um agente e registra tudo."""
-    agent     = load_agent(agent_name)
+    is_heuristic = agent_name.lower() == "heuristic"
+    if is_heuristic:
+        agent = {
+            "nome": "Heuristic",
+            "tier": 1,
+            "specialty": "Local Automation & Tasks",
+            "model": "heuristic-local",
+            "ruleset_version": "v1",
+            "evolution": "Stable",
+            "success_rate": 100.0,
+            "status": "active",
+            "pontos": {"externos": 0, "internos": 0},
+            "tasks_completed": 0,
+            "tasks_failed": 0,
+            "_file": ""
+        }
+    else:
+        agent = load_agent(agent_name)
+
     nome      = agent.get("nome", "?")
     model     = agent.get("model", "?")
     tier      = agent.get("tier", "?")
@@ -530,6 +774,38 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
         print("  Nenhuma tarefa nova sem aprovacao explicita do Arquiteto.")
         sys.exit(1)
 
+    # 1. Roteamento Dinâmico (Complexity Routing)
+    original_model = model
+    if not is_heuristic and is_task_simple(task) and model in {"google/gemini-2.5-pro", "anthropic/claude-opus-4", "anthropic/claude-sonnet-4-5"}:
+        model = "google/gemini-2.5-flash-lite"
+        agent["model"] = model
+        print(f"[ROUTING] Tarefa simples detectada. Roteando temporariamente de {original_model} para {model} para economizar custos.")
+
+    # 2. Verifica Cache Semântico
+    if not is_heuristic:
+        cached_response = check_semantic_cache(nome, task)
+        if cached_response:
+            print("=" * 60)
+            print(f"  RubberDuckFactory -- Task Runner [CACHE SEMÂNTICO DETECTADO]")
+            print(f"  Agente  : {nome} (Tier {tier} | {evolution} | sr={sr}%)")
+            print(f"  Projeto : {project or 'n/a'}")
+            print("=" * 60)
+            print()
+            print(f"BRIEFING:\n{task}")
+            print()
+            print(f"[CACHE] Carregando resposta anterior do cache semântico (custo 0)...")
+            print()
+            print(f"RESPOSTA DE {nome.upper()}:")
+            print("-" * 60)
+            print(cached_response)
+            print("-" * 60)
+            print("Tokens: 0 in / 0 out | finish=cache | sr=100.0% (reutilizado)")
+            print()
+            write_task_ledger(agent, True, task, project, "Cached semantic response used.")
+            write_history(agent, True, task, "Cached semantic response used.")
+            return
+
+    # 3. RAG Context Injection
     rag_context = ""
     if use_rag:
         print(f"[RAG] Procurando memórias similares para grounding...")
@@ -538,6 +814,17 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
             print(f"[RAG] Contexto semântico injetado.")
 
     full_task = rag_context + task if rag_context else task
+
+    # 4. LLM-DSL Instruction appending
+    if use_dsl:
+        full_task += (
+            "\n\nIMPORTANT: Your response MUST be formatted strictly in the Mini-DSL syntax:\n"
+            "[FILE: path/to/file]\n"
+            "[CONTENT]\n"
+            "(code contents here)\n"
+            "[END_CONTENT]\n"
+            "Do not write any markdown code blocks, conversations, or explanations. Just output the DSL."
+        )
 
     print("=" * 60)
     print(f"  RubberDuckFactory -- Task Runner")
@@ -554,7 +841,12 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
     print(f"Chamando {nome}...")
     print()
 
-    resultado = call_agent(agent, full_task)
+    # 5. Executa Tarefa
+    if is_heuristic:
+        resultado = execute_heuristic_task(task)
+    else:
+        resultado = call_agent(agent, full_task)
+        
     technical_success = resultado["success"]
 
     # Custo
@@ -565,13 +857,29 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
     )
 
     # Stats, evolucao, ledger e historico
-    updated = update_agent_stats(agent, technical_success)
-    write_task_ledger(agent, technical_success, task, project, resultado.get("error") or "")
-    write_history(agent, technical_success, task, resultado.get("error") or "")
+    if is_heuristic:
+        updated = agent
+        write_task_ledger(agent, technical_success, task, project, resultado.get("error") or "")
+        write_history(agent, technical_success, task, resultado.get("error") or "")
+    else:
+        updated = update_agent_stats(agent, technical_success)
+        write_task_ledger(agent, technical_success, task, project, resultado.get("error") or "")
+        write_history(agent, technical_success, task, resultado.get("error") or "")
 
-    # Assinatura RAG + file registry (apenas em caso de sucesso)
-    if technical_success:
+    # Assinatura RAG + file registry + cache semântico
+    if technical_success and not is_heuristic:
         write_rag_signature(agent, task, resultado["content"], project)
+        store_semantic_cache(nome, task, resultado["content"], project)
+        
+        # DSL Parsing se ativado
+        if use_dsl:
+            written = parse_and_execute_dsl(resultado["content"])
+            if written:
+                print(f"  [DSL PARSER] ✅ Arquivos gerados via DSL: {', '.join(written)}")
+                if files is None:
+                    files = []
+                files.extend(written)
+
         if files:
             update_file_registry(files, agent, project)
 
@@ -586,7 +894,7 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
         fail_cnt = updated.get("tasks_failed", 0)
         print(
             f"Tokens: {resultado['prompt_tokens']} in / {resultado['completion_tokens']} out"
-            f" | finish={resultado['finish_reason']}"
+            f" | finish={resultado['finish_reason'] if not is_heuristic else 'local'}"
             f" | sr={new_sr}% ({ok_cnt}ok/{fail_cnt}fail)"
         )
     else:
@@ -622,12 +930,14 @@ def main() -> None:
                              "(atualiza file_registry com autoria do agente)")
     parser.add_argument("--rag", action="store_true",
                         help="Ativa a recuperação de contexto semântico (RAG)")
+    parser.add_argument("--dsl", action="store_true",
+                        help="Usa Mini-DSL estruturada para economizar tokens de output")
 
     args = parser.parse_args()
 
     if args.agent and args.task:
         files = [f.strip() for f in args.files.split(",")] if args.files else None
-        run_task(args.agent, args.task, args.project, files, args.rag)
+        run_task(args.agent, args.task, args.project, files, args.rag, args.dsl)
     elif args.agent or args.task:
         parser.error("Use --agent e --task juntos, ou nenhum (modo hello-world).")
     else:
