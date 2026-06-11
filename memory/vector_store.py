@@ -5,8 +5,8 @@ Arquitetura: ChromaDB Embedded + sentence-transformers (all-MiniLM-L6-v2)
 Uso: uv run python memory/vector_store.py
 """
 
+import hashlib
 import os
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -67,7 +67,9 @@ class AgentMemory:
             ID único da memória gravada
         """
         collection = self._get_collection(agent_id)
-        memory_id = str(uuid.uuid4())
+        # ID determinístico por conteúdo: re-gravar a mesma memória faz upsert
+        # (sobrescreve) em vez de criar duplicata. Resolve o recall duplicado.
+        memory_id = self._memory_id(agent_id, content)
         embedding = self._model.encode(content).tolist()
 
         base_meta = {
@@ -77,13 +79,19 @@ class AgentMemory:
         if metadata:
             base_meta.update(metadata)
 
-        collection.add(
+        collection.upsert(
             ids=[memory_id],
             embeddings=[embedding],
             documents=[content],
             metadatas=[base_meta],
         )
         return memory_id
+
+    @staticmethod
+    def _memory_id(agent_id: str, content: str) -> str:
+        """ID estável derivado de (agente, conteúdo) — garante idempotência."""
+        digest = hashlib.sha256(f"{agent_id.lower()}:{content}".encode("utf-8"))
+        return digest.hexdigest()
 
     def recall(
         self,
@@ -115,11 +123,16 @@ class AgentMemory:
         )
 
         memories = []
+        seen: set[str] = set()
         for doc, meta, dist in zip(
             results["documents"][0],
             results["metadatas"][0],
             results["distances"][0],
         ):
+            # Dedup defensivo: nunca devolve o mesmo conteúdo duas vezes
+            if doc in seen:
+                continue
+            seen.add(doc)
             memories.append({"content": doc, "metadata": meta, "distance": dist})
         return memories
 

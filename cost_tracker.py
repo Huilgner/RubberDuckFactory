@@ -10,14 +10,27 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 LEDGER_PATH = ROOT_DIR / "project_ledger" / "history.json"
 
-# Preços por 1M tokens (USD) — fonte: OpenRouter, 2026-05
+# Preços por 1M tokens (USD) — fonte: OpenRouter /api/v1/models, 2026-06-10
 MODEL_PRICING: dict[str, dict[str, float]] = {
+    # Google Gemini
     "google/gemini-2.5-pro":            {"input": 1.25,  "output": 10.00},
-    "google/gemini-2.5-flash":          {"input": 0.15,  "output": 0.60},
-    "google/gemini-2.5-flash-lite":     {"input": 0.075, "output": 0.30},
-    "deepseek/deepseek-chat":           {"input": 0.27,  "output": 1.10},
-    "anthropic/claude-opus-4":          {"input": 15.00, "output": 75.00},
+    "google/gemini-2.5-flash":          {"input": 0.30,  "output": 2.50},
+    "google/gemini-2.5-flash-lite":     {"input": 0.10,  "output": 0.40},
+    "google/gemini-3.1-flash-lite":     {"input": 0.25,  "output": 1.50},
+    "google/gemini-3-flash-preview":    {"input": 0.50,  "output": 3.00},
+    "google/gemini-3.5-flash":          {"input": 1.50,  "output": 9.00},
+    # DeepSeek
+    "deepseek/deepseek-chat":           {"input": 0.20,  "output": 0.80},
+    "deepseek/deepseek-v4-flash":       {"input": 0.10,  "output": 0.20},
     "deepseek/deepseek-v4-flash:free":  {"input": 0.00,  "output": 0.00},
+    "deepseek/deepseek-v4-pro":         {"input": 0.43,  "output": 0.87},
+    # MiniMax
+    "minimax/minimax-m2":               {"input": 0.26,  "output": 1.00},
+    "minimax/minimax-m2.5":             {"input": 0.15,  "output": 0.90},
+    "minimax/minimax-m3":               {"input": 0.30,  "output": 1.20},
+    # Anthropic
+    "anthropic/claude-opus-4":          {"input": 15.00, "output": 75.00},
+    "anthropic/claude-sonnet-4-5":      {"input": 3.00,  "output": 15.00},
 }
 
 
