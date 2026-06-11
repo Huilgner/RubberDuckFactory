@@ -1,0 +1,10 @@
+{
+  "_doc": "Mapa de papeis -> champion + challengers para o duel_runner (ADR-003). O champion e o titular atual; os challengers sao agentes de mesma funcao com modelo/config diferente que competem por fitness. Adicione challengers livremente.",
+  "version": 1,
+  "roles": {
+    "frontend": {
+      "champion": "Nova",
+      "challengers": ["Iris"]
+    }
+  }
+}

@@ -69,7 +69,7 @@ def _ensure_collection(collection_name: str) -> None:
 # ─── Ferramentas MCP ─────────────────────────────────────────────────────────
 
 @mcp.tool()
-def remember(agent: str, content: str, metadata: dict | None = None) -> dict:
+def remember(agent: str, content: str, metadata: dict | None = None, doc_id: str | None = None) -> dict:
     """
     Grava um fragmento de memória na coleção do agente.
 
@@ -77,6 +77,7 @@ def remember(agent: str, content: str, metadata: dict | None = None) -> dict:
         agent:    Nome do agente (ex: 'nova', 'falcon', 'shadow').
         content:  Texto a ser memorizado.
         metadata: Dicionário opcional com metadados adicionais.
+        doc_id:   ID único opcional (UUID) para evitar duplicações.
 
     Returns:
         dict com 'id' do ponto gravado e 'collection' utilizada.
@@ -85,7 +86,10 @@ def remember(agent: str, content: str, metadata: dict | None = None) -> dict:
     _ensure_collection(collection)
 
     vector = get_embedder().encode(content).tolist()
-    doc_id = str(uuid.uuid4())
+    if not doc_id:
+        # ID determinístico por (agente, conteúdo): re-gravar faz upsert
+        # em vez de duplicar. Evita memórias repetidas no recall.
+        doc_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{agent.lower()}:{content}"))
     payload = {"content": content, "agent": agent}
     if metadata:
         payload.update(metadata)
@@ -114,20 +118,23 @@ def recall(agent: str, query: str, top_k: int = 5) -> list[dict]:
     _ensure_collection(collection)
 
     vector = get_embedder().encode(query).tolist()
-    results = qdrant.search(
+    # qdrant-client >= 1.12 removeu .search(); usar query_points().points
+    results = qdrant.query_points(
         collection_name=collection,
-        query_vector=vector,
+        query=vector,
         limit=top_k,
         with_payload=True,
-    )
-    return [
-        {
-            "id": str(r.id),
-            "score": round(r.score, 4),
-            "content": r.payload.get("content", ""),
-        }
-        for r in results
-    ]
+    ).points
+    seen: set[str] = set()
+    out = []
+    for r in results:
+        content = r.payload.get("content", "")
+        # Dedup defensivo: não devolve o mesmo conteúdo duas vezes
+        if content in seen:
+            continue
+        seen.add(content)
+        out.append({"id": str(r.id), "score": round(r.score, 4), "content": content})
+    return out
 
 
 @mcp.tool()
@@ -242,13 +249,150 @@ def cost_report(agent: str | None = None, period: str = "all") -> str:
     return "\n".join(lines)
 
 
+# ─── API REST Auxiliar para o Runner ─────────────────────────────────────────
+
+def _get_semantic_cache(agent: str, task: str) -> str | None:
+    collection = "semantic_cache"
+    _ensure_collection(collection)
+    
+    info = qdrant.get_collection(collection_name=collection)
+    if info.points_count == 0:
+        return None
+        
+    vector = get_embedder().encode(task).tolist()
+    
+    results = qdrant.query_points(
+        collection_name=collection,
+        query=vector,
+        query_filter=Filter(
+            must=[
+                FieldCondition(
+                    key="agent",
+                    match=MatchValue(value=agent)
+                )
+            ]
+        ),
+        limit=1,
+        with_payload=True
+    ).points
+
+    if results:
+        r = results[0]
+        # Score de cosseno no Qdrant: >= 0.92 indica tarefa idêntica
+        if r.score >= 0.92:
+            return r.payload.get("content")
+    return None
+
+
+def _set_semantic_cache(agent: str, task: str, response: str, project: str) -> dict:
+    collection = "semantic_cache"
+    _ensure_collection(collection)
+    
+    vector = get_embedder().encode(task).tolist()
+    doc_id = str(uuid.uuid4())
+    
+    payload = {
+        "content": response,
+        "agent": agent,
+        "task": task,
+        "project": project,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    qdrant.upsert(
+        collection_name=collection,
+        points=[PointStruct(id=doc_id, vector=vector, payload=payload)]
+    )
+    return {"id": doc_id, "collection": collection}
+
+
+# Starlette endpoints
+from starlette.responses import JSONResponse
+
+async def api_remember(request):
+    try:
+        data = await request.json()
+        agent = data.get("agent")
+        content = data.get("content")
+        metadata = data.get("metadata")
+        doc_id = data.get("id")
+        
+        if not agent or not content:
+            return JSONResponse({"error": "Campos 'agent' e 'content' são obrigatórios."}, status_code=400)
+            
+        res = remember(agent, content, metadata, doc_id)
+        return JSONResponse(res)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def api_recall(request):
+    try:
+        data = await request.json()
+        agent = data.get("agent")
+        query = data.get("query")
+        top_k = data.get("top_k", 5)
+        
+        if not agent or not query:
+            return JSONResponse({"error": "Campos 'agent' e 'query' são obrigatórios."}, status_code=400)
+            
+        res = recall(agent, query, top_k)
+        return JSONResponse(res)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def api_cache_get(request):
+    try:
+        data = await request.json()
+        agent = data.get("agent")
+        task = data.get("task")
+        
+        if not agent or not task:
+            return JSONResponse({"error": "Campos 'agent' e 'task' são obrigatórios."}, status_code=400)
+            
+        cached_content = _get_semantic_cache(agent, task)
+        return JSONResponse({"cached": cached_content is not None, "content": cached_content})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def api_cache_set(request):
+    try:
+        data = await request.json()
+        agent = data.get("agent")
+        task = data.get("task")
+        response = data.get("response")
+        project = data.get("project", "RubberDuckFactory")
+        
+        if not agent or not task or not response:
+            return JSONResponse({"error": "Campos 'agent', 'task' e 'response' são obrigatórios."}, status_code=400)
+            
+        res = _set_semantic_cache(agent, task, response, project)
+        return JSONResponse(res)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def setup_api_routes(app):
+    from starlette.routing import Route
+    app.routes.append(Route("/api/remember", api_remember, methods=["POST"]))
+    app.routes.append(Route("/api/recall", api_recall, methods=["POST"]))
+    app.routes.append(Route("/api/semantic_cache/get", api_cache_get, methods=["POST"]))
+    app.routes.append(Route("/api/semantic_cache/set", api_cache_set, methods=["POST"]))
+
+
 # ─── Entrypoint ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "http":
         import uvicorn
         port = int(os.environ.get("MCP_PORT", 8001))
+        # 0.0.0.0 para ser alcançável pelo mapeamento de porta do Docker.
+        # 127.0.0.1 só escuta no loopback interno do container (inacessível de fora).
+        host = os.environ.get("MCP_HOST", "0.0.0.0")
         app = mcp.streamable_http_app()
-        uvicorn.run(app, host="127.0.0.1", port=port)
+        setup_api_routes(app)
+        uvicorn.run(app, host=host, port=port)
     else:
         mcp.run()
