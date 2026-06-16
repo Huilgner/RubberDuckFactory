@@ -4,8 +4,9 @@ agents/duel_runner.py -- Orquestrador de Duelos de Agentes (ADR-003)
 
 O Orquestrador decide, POR TAREFA, como os agentes de um mesmo papel competem:
 
-  * solo (alternado)  -> tarefas simples: roda UM agente, alternando champion/
-                         challenger a cada chamada. Testa com frequencia e baixo custo.
+  * solo (sorteio)    -> tarefas simples: roda UM agente, sorteado de forma
+                         ponderada (cobertura) -- favorece o menos amostrado,
+                         mas continua estocastico. Testa com frequencia e baixo custo.
   * parallel          -> tarefas complexas: roda TODOS em paralelo na mesma tarefa.
                          Expoe divergencias -> facil achar erros/alucinacoes.
 
@@ -27,6 +28,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import argparse
 import json
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -186,14 +188,26 @@ def judge_outputs(task: str, runs: list[dict]) -> dict:
 # Modos
 # --------------------------------------------------------------------------- #
 def run_solo(agents: list[dict], role: str, task: str, record_stats: bool) -> list[dict]:
+    """Selecao parcialmente randomizada com cobertura: sorteio ponderado que
+    favorece o agente menos amostrado (peso = 1/(amostras+1)). Quebra o vies de
+    ordem e ainda garante que nenhum agente fique de fora por azar (ADR-003)."""
+    rkey = role.lower()
     state = _load_state()
-    idx = state.get(role.lower(), 0) % len(agents)
-    chosen = agents[idx]
+    counts = state.get(rkey)
+    if not isinstance(counts, dict):   # migra estado antigo (round-robin guardava int)
+        counts = {}
+
+    weights = [1.0 / (counts.get(a["nome"], 0) + 1) for a in agents]
+    chosen = random.choices(agents, weights=weights, k=1)[0]
+
     if record_stats:
-        state[role.lower()] = (idx + 1) % len(agents)
+        counts[chosen["nome"]] = counts.get(chosen["nome"], 0) + 1
+        state[rkey] = counts
         _save_state(state)
-    print(f"  modo SOLO -> alternancia escolheu: {chosen['nome']} ({chosen['model']}) "
-          f"[proximo: {agents[(idx+1) % len(agents)]['nome']}]")
+
+    dist = ", ".join(f"{a['nome']}:{counts.get(a['nome'], 0)}" for a in agents)
+    print(f"  modo SOLO -> sorteio ponderado (cobertura) escolheu: {chosen['nome']} ({chosen['model']})")
+    print(f"             amostras por agente -> {dist}")
     return [run_one(chosen, task, record_stats)]
 
 

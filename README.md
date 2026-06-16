@@ -127,16 +127,25 @@ Agents are defined as JSON files in `agents/active/`. Each has a model, tier, sp
 
 | Agent | Tier | Model | Specialty | Evolution |
 |---|---|---|---|---|
+| **Sovereign** | 4 — Architect | `anthropic/claude-sonnet-4-5` | Business Analysis & Product Documentation | Stable |
 | **Shadow** | 3 — Specialist | `google/gemini-2.5-pro` | Backend & Security | Stable |
 | **Chen** | 2 — Operator | `deepseek/deepseek-chat` | Backend Engineering | Stable |
 | **Nova** | 2 — Operator | `google/gemini-2.5-flash` | Frontend Development | Stable |
+| **Iris** | 2 — Operator | `deepseek/deepseek-v4-flash` | Frontend Development | Stable |
+| **Neo** | 2 — Operator | `google/gemini-2.5-flash-lite` | Frontend Optimization | Stable |
 | **Atlas** | 2 — Operator | `google/gemini-2.5-flash` | SRE & Infrastructure | Stable |
 | **Lens** | 2 — Operator | `deepseek/deepseek-chat` | QA & Observability | Stable |
-| **Phoenix** | 1 — Observer | `anthropic/claude-opus-4` | Elixir / OTP | Stable |
+| **Orion** | 2 — Operator | `google/gemini-2.5-flash` | Android Development | Stable |
+| **Phoenix** | 1 — Observer | `anthropic/claude-opus-4` | Elixir & Distributed Systems | Stable |
 | **Falcon** | 1 — Observer | `google/gemini-2.5-flash-lite` | Documentation & Maintenance | Stable |
-| **Quill** | 1 — Observer | `deepseek/deepseek-v4-flash:free` | Technical Documentation | Stable |
+| **Quill** | 1 — Observer | `deepseek/deepseek-chat` | Technical Documentation | Stable |
+| **Scribe** | 1 — Observer | `deepseek/deepseek-v4-flash` | Documentation & Human Handoff | Stable |
 
-**Tiers:** `1 = Observer` → `2 = Operator` → `3 = Specialist` → `4 = Architect (reserved)`
+**Tiers:** `1 = Observer` → `2 = Operator` → `3 = Specialist` → `4 = Architect`
+
+> On-demand: **Fable 5** (`anthropic/claude-fable-5`) acts as a Tier 4 orchestrator only when explicitly triggered via `RDF_FABLE <task>` — see [`CLAUDE.md`](CLAUDE.md). It is not a persisted squad member.
+
+> Same-function agents form **competitive pools** dispatched via `duel_runner.py` (partially randomized), not hand-picked — generating per-model fitness data for ADR-003. Pools today (`duel_roster.json`): frontend (**Nova / Iris**) and documentation (**Quill / Falcon / Scribe**). See [`GUIA.md`](GUIA.md).
 
 Dismissed agents are moved to `agents/blacklist/` with a dismissal report. See `agents/blacklist/echo.json` for an example (dismissed for hallucination in production).
 
@@ -184,6 +193,22 @@ Before any production deploy, the orchestrator freezes the codebase (`deploy_fre
 ### 9. Blacklist Pressure
 
 Agents that cause critical infractions (e.g., hallucinating in production) are dismissed rather than silently retired. The blacklist record documents the cause, creating a labeled negative example for future model selection decisions.
+
+### 10. Local Semantic Caching (ChromaDB)
+
+A local semantic cache is implemented via ChromaDB. Before invoking any remote LLM, the runner embeds the task query and searches the `semantic_cache` collection. If a highly similar past execution is found (cosseno distance < 0.08), the runner instantly loads the cached response with **zero API cost**.
+
+### 11. Complexity-based Dynamic Routing
+
+To optimize tokens, the runner automatically determines query complexity. Trivial tasks (e.g., greetings, short command tests) assigned to expensive models (like Gemini Pro or Claude Opus) are dynamically routed to lightweight, cheap models (like Gemini Flash Lite) in memory, protecting the API budget.
+
+### 12. Heuristic Local Automation Agent (Zero-Cost)
+
+The runner intercepts tasks assigned to the `heuristic` agent, bypassing all remote API calls. Simple tasks like file formatting (Black/Prettier), log cleaning, or secure command executions (lint checks, syntax validation) run locally and deterministically, saving 100% of LLM costs.
+
+### 13. LLM-DSL Compression & Local Compilation
+
+Using the `--dsl` flag, agents are instructed to format responses in a minimal markdown DSL (`[FILE:path] [CONTENT] ... [END_CONTENT]`), avoiding conversational clutter. A parser in the runner compile-writes these files locally, dropping completion token counts by up to 90%.
 
 ---
 
