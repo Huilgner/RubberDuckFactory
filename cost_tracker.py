@@ -31,6 +31,7 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     # Anthropic
     "anthropic/claude-opus-4":          {"input": 15.00, "output": 75.00},
     "anthropic/claude-sonnet-4-5":      {"input": 3.00,  "output": 15.00},
+    "anthropic/claude-fable-5":         {"input": 10.00, "output": 50.00},
 }
 
 

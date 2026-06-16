@@ -5,6 +5,10 @@
     "frontend": {
       "champion": "Nova",
       "challengers": ["Iris"]
+    },
+    "documentation": {
+      "champion": "Quill",
+      "challengers": ["Falcon", "Scribe"]
     }
   }
 }

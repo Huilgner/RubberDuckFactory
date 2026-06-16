@@ -26,16 +26,35 @@ When Docker is running (`docker compose up -d` in `C:\RubberDuckFactory`), the M
 
 | Agent | Tier | Model | Specialty | Use when |
 |---|---|---|---|---|
+| Sovereign | 4 — Architect | anthropic/claude-sonnet-4-5 | Business Analysis & Product Documentation | Briefings de produto, análise de negócio, documentação executiva |
 | Shadow | 3 — Specialist | google/gemini-2.5-pro | Backend & Security | Security review, sensitive architecture, complex backend decisions |
 | Chen | 2 — Operator | deepseek/deepseek-chat | Backend Engineering | Backend boilerplate, CRUD, API routes, DB queries, high-token low-complexity tasks |
-| Nova | 2 — Operator | google/gemini-2.5-flash | Frontend Development | React/Next.js components, styling, frontend refactors |
+| Nova | 2 — Operator | google/gemini-2.5-flash | Frontend Development | Pool frontend — dispatch competitivo (ver abaixo), não escolher a dedo |
+| Iris | 2 — Operator | deepseek/deepseek-v4-flash | Frontend Development | Pool frontend — dispatch competitivo (ver abaixo), não escolher a dedo |
+| Neo | 2 — Operator | google/gemini-2.5-flash-lite | Frontend Optimization | Pool frontend — dispatch competitivo (ver abaixo), não escolher a dedo |
 | Atlas | 2 — Operator | google/gemini-2.5-flash | SRE & Infrastructure | Deploy committee: infra validation, service health, CI/CD, availability |
 | Lens | 2 — Operator | deepseek/deepseek-chat | QA & Observability | Deploy committee: API health, log scanning, frontend integrity, error tracking |
-| Phoenix | 1 — Observer | anthropic/claude-opus-4 | Elixir / OTP | Elixir/Phoenix/LiveView, OTP supervision trees, GenServer patterns |
-| Falcon | 1 — Observer | google/gemini-2.5-flash-lite | Documentation & Maintenance | README updates, changelog, light refactors, file renaming |
-| Quill | 1 — Observer | deepseek/deepseek-v4-flash:free | Technical Documentation | ADRs, architecture docs, meeting notes, summarizing agent outputs |
+| Orion | 2 — Operator | google/gemini-2.5-flash | Android Development | Desenvolvimento Android, telas/lógica mobile nativa |
+| Phoenix | 1 — Observer | anthropic/claude-opus-4 | Elixir & Distributed Systems | Elixir/Phoenix/LiveView, OTP supervision trees, GenServer patterns |
+| Falcon | 1 — Observer | google/gemini-2.5-flash-lite | Documentation & Maintenance | Pool documentation — dispatch competitivo (skill doc-handoff), não escolher a dedo |
+| Quill | 1 — Observer | deepseek/deepseek-chat | Technical Documentation | Pool documentation — dispatch competitivo (skill doc-handoff), não escolher a dedo |
+| Scribe | 1 — Observer | deepseek/deepseek-v4-flash | Documentation & Human Handoff | Pool documentation — dispatch competitivo (skill doc-handoff), não escolher a dedo |
 
 Agent config files live in `agents/active/`. Dismissed agents are in `agents/blacklist/`.
+Fonte de verdade é sempre `agents/active/` — consulte o JSON antes de delegar (model/evolution/success_rate podem ter mudado).
+
+### Agentes de mesma função — dispatch competitivo (ADR-003)
+
+Quando vários agentes cobrem a mesma função (ex.: frontend → Nova, Iris, Neo), **não os escolha a dedo** pela tabela acima. Eles formam um **pool competitivo**: para cada tarefa, o `duel_runner.py` decide qual(is) executa(m), de forma parcialmente randomizada, gerando variância de fitness **por modelo**. Esses dados alimentam o `gene_crossover.py` (ADR-003), que aprende quais combinações modelo+ruleset entregam qualidade e quais degradam — guiando a criação dos agentes futuros e revelando "mutações"/erros.
+
+```bash
+# Despacha a tarefa para o pool do papel (champion + challengers em duel_roster.json)
+uv run python agents/duel_runner.py --role frontend --task "..."
+```
+
+- `solo` → roda UM agente do pool — barato, alta frequência de amostragem.
+- `parallel` → roda TODOS na mesma tarefa — expõe divergência (caça alucinação/erro).
+- `--judge` → juiz barato elege o vencedor. Cada execução vira um `DUEL_RUN` no `history.json`.
 
 ---
 
@@ -123,6 +142,30 @@ Hooks nunca adicionam tokens ao contexto de agentes externos — atuam apenas no
 
 See `.governance/model_caution_list.md` before assigning a model to a new agent.
 Key prohibitions: models < 30B params for code, `*-thinking/*-r1` variants for simple tasks, Gemini 1.5 family (discontinued on OpenRouter), any model ID without `provider/` prefix.
+
+---
+
+## Fable 5 — Orquestrador Soberano sob Demanda (`RDF_FABLE`)
+
+`anthropic/claude-fable-5` é o modelo mais caro do stack ($10/$50 por 1M). Por isso **não** entra na hierarquia de delegação normal — só é acionado **explicitamente** via gatilho opt-in, atuando como Architect (Tier 4).
+
+**Uso:**
+
+```bash
+# Fable como orquestrador da tarefa (Architect Tier 4 sintético)
+uv run python agents/agent_runner.py --task "RDF_FABLE Validar o blueprint do PCP R02 antes de implementar"
+
+# Sem o gatilho -> fluxo normal (opus/gemini via delegação)
+uv run python agents/agent_runner.py --agent shadow --task "..."
+```
+
+**Comportamento:**
+
+- O prefixo `RDF_FABLE` (case-insensitive) dispara um agente **sintético** `Fable` (Tier 4, não persistido em JSON — igual ao `heuristic`).
+- **Isento do roteamento por complexidade**: opt-in explícito nunca é rebaixado para `gemini-2.5-flash-lite`.
+- `temperature` é **omitido** automaticamente para Fable 5 e Opus 4.7/4.8 (esses modelos retornam HTTP 400 com sampling params). Ver `_model_rejects_sampling()` em `agent_runner.py`.
+- Custo registrado normalmente no ledger (`cost_tracker.py` conhece a tarifa $10/$50).
+- Sem o gatilho, nada muda: a delegação padrão (opus/gemini/deepseek) segue intacta.
 
 ---
 

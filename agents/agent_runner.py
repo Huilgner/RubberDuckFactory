@@ -21,6 +21,7 @@ Pos-tarefa (modo 2):
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,10 +64,21 @@ MODEL_MAX_TOKENS: dict[str, int] = {
     "deepseek/deepseek-v4-flash:free": 2000,
     "anthropic/claude-opus-4":         4000,
     "anthropic/claude-sonnet-4-5":     6000,
+    "anthropic/claude-fable-5":        16000,
 }
 DEFAULT_MAX_TOKENS = 3000
 
 TIER_NAMES = {1: "Observer", 2: "Operator", 3: "Specialist", 4: "Architect"}
+
+# Fable 5 como orquestrador sob demanda (opt-in): "RDF_FABLE <tarefa>"
+FABLE_MODEL = "anthropic/claude-fable-5"
+FABLE_TRIGGER_RE = re.compile(r"^\s*RDF_FABLE\b[:\s]*", re.IGNORECASE)
+
+
+def _model_rejects_sampling(model: str) -> bool:
+    """Fable 5 e Opus 4.7+ removeram temperature/top_p/top_k -> enviar retorna HTTP 400."""
+    m = model.lower()
+    return any(tag in m for tag in ("claude-fable-5", "claude-opus-4-7", "claude-opus-4-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -162,9 +174,11 @@ def call_agent(agent: dict, user_message: str, max_tokens: int | None = None) ->
             {"role": "system", "content": system_msg},
             {"role": "user",   "content": user_message},
         ],
-        "temperature": 0.3,
         "max_tokens":  max_tokens,
     }
+    # Fable 5 / Opus 4.7+ removeram sampling params -> enviar temperature retorna HTTP 400.
+    if not _model_rejects_sampling(model):
+        payload["temperature"] = 0.3
 
     try:
         with httpx.Client(timeout=180.0) as client:
@@ -399,199 +413,209 @@ def update_file_registry(files: list[str], agent: dict, project: str) -> None:
 # RAG signature — grava assinatura da tarefa no ChromaDB (squad_knowledge)
 # ---------------------------------------------------------------------------
 
+def _load_fallback_data() -> dict:
+    fallback_file = ROOT_DIR / "project_ledger" / "local_memory_fallback.json"
+    if not fallback_file.exists():
+        return {"semantic_cache": {}, "squad_knowledge": []}
+    try:
+        return json.loads(fallback_file.read_text(encoding="utf-8"))
+    except Exception:
+        return {"semantic_cache": {}, "squad_knowledge": []}
+
+
+def _save_fallback_data(data: dict) -> None:
+    fallback_file = ROOT_DIR / "project_ledger" / "local_memory_fallback.json"
+    try:
+        fallback_file.parent.mkdir(parents=True, exist_ok=True)
+        fallback_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        print(f"  [WARNING] Não foi possível gravar no fallback de memória local: {e}")
+
+
 def write_rag_signature(agent: dict, task: str, response: str, project: str) -> None:
     """
-    Indexa a tarefa + resposta no ChromaDB (squad_knowledge) com metadados de autoria.
-    Falha silenciosamente se chromadb/sentence_transformers não estiverem disponíveis.
+    Indexa a tarefa + resposta no Qdrant central e grava no fallback local.
     """
+    nome = agent.get("nome", "?")
+    ts = _ts()
+    doc_text = (
+        f"[TAREFA — {nome} | {ts}]\n"
+        f"Projeto: {project}\n"
+        f"Briefing: {task[:400]}\n"
+        f"Resposta: {response[:600]}"
+    )
+    
+    server_success = False
+    # 1. Tenta gravar no Qdrant central via servidor MCP
     try:
-        import chromadb
-        from chromadb.config import Settings as ChromaSettings
-        from sentence_transformers import SentenceTransformer
-
-        nome  = agent.get("nome", "?")
-        model = agent.get("model", "?")
-        tier  = agent.get("tier", 1)
-        ts    = _ts()
-
-        db_path    = str(ROOT_DIR / "memory" / "chroma_db")
-        chroma_cli = chromadb.PersistentClient(
-            path=db_path,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        collection = chroma_cli.get_or_create_collection(
-            name="squad_knowledge",
-            metadata={"hnsw:space": "cosine"},
-        )
-
-        encoder  = SentenceTransformer("all-MiniLM-L6-v2")
-        doc_text = (
-            f"[TAREFA — {nome} | {ts}]\n"
-            f"Projeto: {project}\n"
-            f"Briefing: {task[:400]}\n"
-            f"Resposta: {response[:600]}"
-        )
-        embedding = encoder.encode(doc_text).tolist()
-
-        # ID único: agent + timestamp (sem colisão)
-        doc_id = f"{nome.lower()}_{ts.replace(':', '').replace('-', '').replace('+', '')[:17]}"
-
-        collection.add(
-            ids=[doc_id],
-            embeddings=[embedding],
-            documents=[doc_text],
-            metadatas=[{
-                "agent":    nome,
-                "model":    model,
-                "tier":     str(tier),
-                "project":  project,
+        import httpx
+        url = "http://localhost:8001/api/remember"
+        payload = {
+            "agent": "squad_knowledge",
+            "content": doc_text,
+            "metadata": {
+                "agent": nome,
+                "model": agent.get("model", "?"),
+                "tier": str(agent.get("tier", 1)),
+                "project": project,
                 "task_type": "agent_task",
                 "timestamp": ts,
-                "topic":    f"task/{nome.lower()}",
-                "source":   "agent_runner",
-            }],
-        )
-        print(f"  [rag_signature] ✅ Tarefa de {nome} indexada em squad_knowledge (id={doc_id})")
-    except ImportError:
-        pass  # chromadb/sentence_transformers não instalado — silencioso
+                "topic": f"task/{nome.lower()}",
+                "source": "agent_runner"
+            }
+        }
+        resp = httpx.post(url, json=payload, timeout=2.0)
+        if resp.status_code == 200:
+            server_success = True
+            print(f"  [rag_signature] ✅ Tarefa indexada no Qdrant central")
+    except Exception:
+        pass
+
+    # 2. Grava no fallback local
+    try:
+        data = _load_fallback_data()
+        squad = data.setdefault("squad_knowledge", [])
+        
+        # Limita o tamanho do fallback local para não crescer infinitamente (manter as últimas 100 memórias)
+        if len(squad) >= 100:
+            squad.pop(0)
+            
+        squad.append({
+            "agent": nome,
+            "content": doc_text,
+            "project": project,
+            "timestamp": ts
+        })
+        _save_fallback_data(data)
+        if not server_success:
+            print(f"  [rag_signature] ⚠️ Servidor offline. Salvo localmente no JSON de fallback.")
     except Exception as e:
-        print(f"  [WARNING] RAG signature falhou: {e}")
+        print(f"  [WARNING] Falha ao gravar assinatura RAG local: {e}")
 
 
 def retrieve_rag_context(agent_name: str, query: str) -> str:
-    """Busca fragmentos de memória relevantes no ChromaDB local."""
+    """Busca fragmentos de memória relevantes no Qdrant central ou fallback local."""
+    docs = []
+    
+    # 1. Tenta recuperar via servidor MCP
     try:
-        import chromadb
-        from chromadb.config import Settings as ChromaSettings
-        from sentence_transformers import SentenceTransformer
-
-        db_path = str(ROOT_DIR / "memory" / "chroma_db")
-        chroma_cli = chromadb.PersistentClient(
-            path=db_path,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        encoder = SentenceTransformer("all-MiniLM-L6-v2")
-        query_embedding = encoder.encode(query).tolist()
-
-        docs = []
-
-        # 1. Tenta recuperar do squad_knowledge
+        import httpx
+        url = "http://localhost:8001/api/recall"
+        
+        # Busca no squad_knowledge
+        resp = httpx.post(url, json={"agent": "squad_knowledge", "query": query, "top_k": 3}, timeout=3.0)
+        if resp.status_code == 200:
+            results = resp.json()
+            for r in results:
+                if r.get("score", 0.0) >= 0.6:
+                    docs.append(f"- [Memória Compartilhada] {r.get('content')}")
+                    
+        # Busca na memória específica do agente
+        resp = httpx.post(url, json={"agent": agent_name, "query": query, "top_k": 2}, timeout=3.0)
+        if resp.status_code == 200:
+            results = resp.json()
+            for r in results:
+                if r.get("score", 0.0) >= 0.6:
+                    docs.append(f"- [Memória do Agente] {r.get('content')}")
+                    
+    except Exception:
+        # Fallback offline usando busca heurística por palavras-chave
         try:
-            collection = chroma_cli.get_collection(name="squad_knowledge")
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=3,
-                include=["documents", "distances"]
-            )
-            if results and results.get("documents") and results["documents"][0]:
-                for doc, dist in zip(results["documents"][0], results["distances"][0]):
-                    if dist < 0.6:  # Similaridade razoável (distância cosseno)
-                        docs.append(f"- [Memória Compartilhada] {doc}")
+            data = _load_fallback_data()
+            squad_memories = data.get("squad_knowledge", [])
+            query_words = set(query.lower().split())
+            
+            scored_docs = []
+            for mem in squad_memories:
+                content = mem.get("content", "")
+                if not content:
+                    continue
+                content_words = set(content.lower().split())
+                intersection = query_words.intersection(content_words)
+                if intersection:
+                    score = len(intersection) / len(query_words)
+                    is_shared = mem.get("agent", "").lower() != agent_name.lower()
+                    scored_docs.append((score, is_shared, content))
+            
+            scored_docs.sort(key=lambda x: x[0], reverse=True)
+            for score, is_shared, content in scored_docs[:3]:
+                if score > 0.15:
+                    prefix = "Memória Compartilhada" if is_shared else "Memória do Agente"
+                    docs.append(f"- [Fallback Local: {prefix}] {content}")
         except Exception:
             pass
 
-        # 2. Tenta recuperar da memória específica do agente
-        agent_collection_name = f"{agent_name.lower()}_memory"
-        try:
-            collection = chroma_cli.get_collection(name=agent_collection_name)
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=2,
-                include=["documents", "distances"]
-            )
-            if results and results.get("documents") and results["documents"][0]:
-                for doc, dist in zip(results["documents"][0], results["distances"][0]):
-                    if dist < 0.6:
-                        docs.append(f"- [Memória do Agente] {doc}")
-        except Exception:
-            pass
-
-        if docs:
-            header = "\n" + "=" * 60 + "\n[CONTEXTO DE MEMÓRIA RECUPERADO (RAG)]\n"
-            footer = "\n" + "=" * 60 + "\n"
-            return header + "\n".join(docs) + footer
-    except Exception as e:
-        print(f"  [WARNING] Falha ao recuperar contexto RAG: {e}")
+    if docs:
+        header = "\n" + "=" * 60 + "\n[CONTEXTO DE MEMÓRIA RECUPERADO (RAG)]\n"
+        footer = "\n" + "=" * 60 + "\n"
+        return header + "\n".join(docs) + footer
     return ""
 
 
 def check_semantic_cache(agent_name: str, task: str) -> str | None:
     """Busca se a tarefa exata ou muito similar já foi respondida com sucesso."""
     try:
-        import chromadb
-        from chromadb.config import Settings as ChromaSettings
-        from sentence_transformers import SentenceTransformer
+        import httpx
+        url = "http://localhost:8001/api/semantic_cache/get"
+        payload = {"agent": agent_name, "task": task}
+        resp = httpx.post(url, json=payload, timeout=2.0)
+        if resp.status_code == 200:
+            res_data = resp.json()
+            if res_data.get("cached"):
+                return res_data.get("content")
+    except Exception:
+        pass
 
-        db_path = str(ROOT_DIR / "memory" / "chroma_db")
-        chroma_cli = chromadb.PersistentClient(
-            path=db_path,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        # Cria ou obtém a coleção
-        collection = chroma_cli.get_or_create_collection(
-            name="semantic_cache",
-            metadata={"hnsw:space": "cosine"},
-        )
-        if collection.count() == 0:
-            return None
-
-        encoder = SentenceTransformer("all-MiniLM-L6-v2")
-        query_embedding = encoder.encode(task).tolist()
-
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=1,
-            where={"agent": agent_name},
-            include=["documents", "distances"]
-        )
-
-        if results and results.get("documents") and results["documents"][0]:
-            doc = results["documents"][0][0]
-            dist = results["distances"][0][0]
-            if dist < 0.08:  # Limite rígido para garantir que a tarefa é idêntica
-                return doc
-    except Exception as e:
-        print(f"  [WARNING] Falha na busca de cache semântico: {e}")
+    # Fallback local (comparação exata de string limpa)
+    try:
+        data = _load_fallback_data()
+        cache = data.get("semantic_cache", {}).get(agent_name.lower(), {})
+        task_clean = task.strip().lower()
+        if task_clean in cache:
+            return cache[task_clean]
+        
+        # Similaridade heurística Jaccard para palavras
+        for cached_task, cached_resp in cache.items():
+            if len(cached_task) == 0:
+                continue
+            words_a = set(task_clean.split())
+            words_b = set(cached_task.split())
+            if not words_a or not words_b:
+                continue
+            intersection = words_a.intersection(words_b)
+            union = words_a.union(words_b)
+            jaccard = len(intersection) / len(union)
+            if jaccard > 0.90:
+                return cached_resp
+    except Exception:
+        pass
     return None
 
 
 def store_semantic_cache(agent_name: str, task: str, response: str, project: str) -> None:
     """Armazena o resultado de uma tarefa bem-sucedida no cache semântico."""
+    server_success = False
     try:
-        import chromadb
-        from chromadb.config import Settings as ChromaSettings
-        from sentence_transformers import SentenceTransformer
+        import httpx
+        url = "http://localhost:8001/api/semantic_cache/set"
+        payload = {"agent": agent_name, "task": task, "response": response, "project": project}
+        resp = httpx.post(url, json=payload, timeout=2.0)
+        if resp.status_code == 200:
+            server_success = True
+            print(f"  [cache_semantico] ✅ Gravado no Qdrant central")
+    except Exception:
+        pass
 
-        db_path = str(ROOT_DIR / "memory" / "chroma_db")
-        chroma_cli = chromadb.PersistentClient(
-            path=db_path,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        collection = chroma_cli.get_or_create_collection(
-            name="semantic_cache",
-            metadata={"hnsw:space": "cosine"},
-        )
-
-        encoder = SentenceTransformer("all-MiniLM-L6-v2")
-        embedding = encoder.encode(task).tolist()
-
-        ts = _ts()
-        doc_id = f"cache_{agent_name.lower()}_{ts.replace(':', '').replace('-', '').replace('+', '')[:17]}"
-
-        collection.add(
-            ids=[doc_id],
-            embeddings=[embedding],
-            documents=[response],
-            metadatas=[{
-                "agent": agent_name,
-                "task": task[:500],
-                "project": project,
-                "timestamp": ts,
-            }]
-        )
-        print(f"  [cache_semantico] ✅ Resultado de {agent_name} cacheado com sucesso (id={doc_id})")
+    # Gravação no fallback local
+    try:
+        data = _load_fallback_data()
+        cache = data.setdefault("semantic_cache", {}).setdefault(agent_name.lower(), {})
+        cache[task.strip().lower()] = response
+        _save_fallback_data(data)
+        if not server_success:
+            print(f"  [cache_semantico] ⚠️ Servidor offline. Gravado localmente no JSON de fallback.")
     except Exception as e:
-        print(f"  [WARNING] Falha ao gravar no cache semântico: {e}")
+        print(f"  [WARNING] Falha ao gravar no cache semântico local: {e}")
 
 
 def is_task_simple(task: str) -> bool:
@@ -744,12 +768,30 @@ def parse_and_execute_dsl(dsl_text: str) -> list[str]:
 def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None, use_rag: bool = False, use_dsl: bool = False) -> None:
     """Modo tarefa: delega briefing especifico a um agente e registra tudo."""
     is_heuristic = agent_name.lower() == "heuristic"
+    is_fable     = agent_name.lower() == "fable"
+    is_synthetic = is_heuristic or is_fable
     if is_heuristic:
         agent = {
             "nome": "Heuristic",
             "tier": 1,
             "specialty": "Local Automation & Tasks",
             "model": "heuristic-local",
+            "ruleset_version": "v1",
+            "evolution": "Stable",
+            "success_rate": 100.0,
+            "status": "active",
+            "pontos": {"externos": 0, "internos": 0},
+            "tasks_completed": 0,
+            "tasks_failed": 0,
+            "_file": ""
+        }
+    elif is_fable:
+        # Orquestrador soberano sob demanda — agente sintético, não persistido em JSON.
+        agent = {
+            "nome": "Fable",
+            "tier": 4,
+            "specialty": "Sovereign Orchestrator / Architect",
+            "model": FABLE_MODEL,
             "ruleset_version": "v1",
             "evolution": "Stable",
             "success_rate": 100.0,
@@ -776,7 +818,7 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
 
     # 1. Roteamento Dinâmico (Complexity Routing)
     original_model = model
-    if not is_heuristic and is_task_simple(task) and model in {"google/gemini-2.5-pro", "anthropic/claude-opus-4", "anthropic/claude-sonnet-4-5"}:
+    if not is_synthetic and is_task_simple(task) and model in {"google/gemini-2.5-pro", "anthropic/claude-opus-4", "anthropic/claude-sonnet-4-5"}:
         model = "google/gemini-2.5-flash-lite"
         agent["model"] = model
         print(f"[ROUTING] Tarefa simples detectada. Roteando temporariamente de {original_model} para {model} para economizar custos.")
@@ -857,7 +899,7 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
     )
 
     # Stats, evolucao, ledger e historico
-    if is_heuristic:
+    if is_synthetic:
         updated = agent
         write_task_ledger(agent, technical_success, task, project, resultado.get("error") or "")
         write_history(agent, technical_success, task, resultado.get("error") or "")
@@ -934,6 +976,16 @@ def main() -> None:
                         help="Usa Mini-DSL estruturada para economizar tokens de output")
 
     args = parser.parse_args()
+
+    # Gatilho opt-in: "RDF_FABLE <tarefa>" -> Fable 5 como orquestrador (Architect Tier 4).
+    # Dispensa --agent; ignora a hierarquia de delegação normal (opus/gemini).
+    if args.task and FABLE_TRIGGER_RE.match(args.task):
+        clean_task = FABLE_TRIGGER_RE.sub("", args.task, count=1).strip()
+        if not clean_task:
+            parser.error("RDF_FABLE exige uma tarefa apos o gatilho. Ex: --task 'RDF_FABLE Refatorar modulo X'")
+        files = [f.strip() for f in args.files.split(",")] if args.files else None
+        run_task("fable", clean_task, args.project, files, args.rag, args.dsl)
+        return
 
     if args.agent and args.task:
         files = [f.strip() for f in args.files.split(",")] if args.files else None
