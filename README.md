@@ -16,6 +16,7 @@ Claude orchestrates a squad of specialized LLM agents, each governed by a tier s
 - [Stack](#stack)
 - [How to Use](#how-to-use)
 - [Agent Squad](#agent-squad)
+- [Skills](#skills)
 - [Engineering Ideas](#engineering-ideas)
 - [Logical Principles](#logical-principles)
 - [Governance Rules](#governance-rules)
@@ -151,6 +152,34 @@ Dismissed agents are moved to `agents/blacklist/` with a dismissal report. See `
 
 ---
 
+## Skills
+
+Skills are invocable workflows in Claude Code (`.claude/skills/`). Project-scoped skills load automatically when the session opens inside `C:\RubberDuckFactory\`; the global `/rdf` skill is available from any directory.
+
+### Inside `C:\RubberDuckFactory\` — load automatically
+
+| Skill | When to use | Invoke |
+|---|---|---|
+| `agent-briefing` | Delegate any task to a squad agent | `/agent-briefing` |
+| `deploy-committee` | Security audit, stability check, or release | `/deploy-committee` |
+| `doc-handoff` | Generate human-readable maintenance entry after integrating agent output | `/doc-handoff` |
+| `governance-check` | Classify infraction, calculate penalty, promote or blacklist an agent | `/governance-check` |
+| `ledger-log` | Record any event in the ledger (task, failure, hallucination, milestone) | `/ledger-log` |
+
+### Global — available from any directory
+
+| Skill | Modes | When to use |
+|---|---|---|
+| `/rdf` | `status` · `novo <project>` · `modificar <project>` | Session started outside the RDF directory — bootstrap context and start or resume a project |
+
+> **Typical session flow:**
+> `/rdf modificar <project>` → `agent-briefing` → `ledger-log` → `doc-handoff`
+>
+> **For deploy:**
+> `agent-briefing` → `deploy-committee` → `ledger-log`
+
+---
+
 ## Engineering Ideas
 
 ### 1. Governance-as-Code
@@ -253,6 +282,7 @@ RubberDuckFactory/
 │   └── skills/
 │       ├── agent-briefing/         # Skill: how to select and brief an agent
 │       ├── deploy-committee/       # Skill: 4-phase quality gate workflow
+│       ├── doc-handoff/            # Skill: human maintenance entry after agent task
 │       ├── governance-check/       # Skill: infraction classification and promotions
 │       └── ledger-log/             # Skill: how to record events in history.json
 ├── .governance/
