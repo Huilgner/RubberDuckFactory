@@ -1,5 +1,24 @@
 # CLAUDE.md — RubberDuckFactory Orchestration Rules
 
+## Início de Sessão — Checklist Obrigatório
+
+Antes de qualquer ação, leia em sequência:
+1. `project_ledger/agent_ledger.log` — últimas 20 entradas (estado dos agentes, pontos, evoluções recentes)
+2. `project_ledger/history.json` — últimas entradas de TASK_SUCCESS/TASK_FAILURE
+3. Blueprint mais recente do projeto em pauta (ver tabela abaixo)
+
+## Projetos Ativos
+
+| Projeto          | Blueprint                                                   | Estado     |
+|------------------|-------------------------------------------------------------|------------|
+| SIGO_FENIX       | `docs/blueprints/SIGO_FENIX/blueprint_R02_PCP_formas.md`  | Em curso   |
+| controle_obras   | `docs/blueprints/controle_obras/blueprint_R00.md`          | Em curso   |
+| CastleVote       | `docs/blueprints/CastleVote/blueprint_R00.md`              | Pendente   |
+| SentinelaEdge    | `docs/blueprints/SentinelaEdge/blueprint_R00.md`           | Pendente   |
+| RubberDuckFactory| `docs/blueprints/RubberDuckFactory/blueprint_R00.md`       | Interno    |
+
+---
+
 ## Role
 
 Claude (claude-sonnet-4-6 or newer) is the **orchestrator** of the RubberDuckFactory squad.

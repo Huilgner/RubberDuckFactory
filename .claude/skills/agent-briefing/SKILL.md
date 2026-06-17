@@ -13,12 +13,21 @@ Consulte `agents/active/` antes de delegar — verifique `evolution` e `success_
 
 | Agente | Tier | Especialidade | Use para |
 |---|---|---|---|
+| Sovereign | 4 — Architect | Business Analysis & Product Docs | Briefings técnicos, blueprints de produto, análise de negócio, documentação executiva |
 | Shadow | 3 — Specialist | Backend & Security | Segurança, arquitetura sensível, decisões de alto risco, code review crítico |
 | Chen | 2 — Operator | Backend Engineering | CRUD, APIs REST, queries DB, boilerplate de alto volume, baixa complexidade |
-| Nova | 2 — Operator | Frontend Development | Componentes React/Next.js, estilos, refatoração de UI, geração > 50 linhas |
+| Nova | 2 — Operator | Frontend (champion) | Componentes React/Next.js, estilos, refatoração de UI, geração > 50 linhas |
+| Atlas | 2 — Operator | SRE & Infrastructure | Docker, CI/CD, healthchecks, availability — **também no deploy-committee** |
+| Lens | 2 — Operator | QA & Observability | Saúde de API, scan de logs, integridade de frontend — **também no deploy-committee** |
+| Orion | 2 — Operator | Android Development | Kotlin/Compose, Room, WorkManager, Hilt, Offline-First |
 | Phoenix | 1 — Observer | Elixir / OTP | GenServer, Supervisor, LiveView, BEAM VM, tolerância a falhas |
 | Falcon | 1 — Observer | Documentation & Maintenance | README, changelog, renomeações, refatorações leves |
 | Quill | 1 — Observer | Technical Documentation | ADRs, docs técnicos, sumários de output de agente, notas de decisão |
+| Scribe | 1 — Observer | Human Handoff Docs | Entrada de manutenção humana pós-tarefa — **use via skill `doc-handoff`** |
+
+**Pool frontend (ADR-003):** Nova (champion) + Iris + Neo competem via `duel_runner --role frontend`. Use o pool para tarefas frontend, não chame Iris/Neo diretamente.
+
+**Pool documentation:** Quill (champion) + Falcon + Scribe competem via `duel_runner --role documentation`. Para doc-handoff use a skill dedicada.
 
 **Regra de custo:** use o menor tier que satisfaz a tarefa.
 **Bloquear se:** agente em `evolution: Degraded` — escale para tier superior ou resolva o estado primeiro.
