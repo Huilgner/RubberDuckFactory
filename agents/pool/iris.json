@@ -1,0 +1,16 @@
+{
+  "nome": "Iris",
+  "tier": 2,
+  "specialty": "Frontend Development",
+  "model": "deepseek/deepseek-v4-flash",
+  "ruleset_version": "FE-505",
+  "status": "active",
+  "evolution": "Stable",
+  "success_rate": 100.0,
+  "tasks_completed": 0,
+  "tasks_failed": 0,
+  "pontos": {
+    "externos": 0,
+    "internos": 0
+  }
+}

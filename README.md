@@ -122,6 +122,43 @@ docker compose down
 
 ---
 
+## Propagation — Multi-user Model
+
+The RDF is shared: several users run their own squad from this repository.
+The rule is **"genome in git, phenotype local"**:
+
+| | Where | Versioned? | Contains |
+|---|---|---|---|
+| **Genome** | `agents/pool/` | ✅ | Agent definitions (name, tier, model, specialty, ruleset) with neutral stats |
+| **Phenotype** | `agents/active/` | ❌ (gitignored) | Your live squad: points, success_rate, evolution, recent_results |
+| **Project residue** | `project_ledger/`, `docs/blueprints/` | ❌ (gitignored) | Task briefings, costs, duels, blueprints — **never leaves your machine** |
+| **Community fitness** | `community/fitness/` | ✅ | Anonymous per-model aggregates (counts, rates, cost) — no task text |
+
+### Getting started on a fresh clone
+
+```bash
+cp .env.example .env       # set your own OPENROUTER_API_KEY
+python rdf_doctor.py --fix # diagnoses the install and bootstraps the local squad
+```
+
+The runner also bootstraps `agents/active/` from the pool automatically on first use.
+
+### Day-to-day sync
+
+```bash
+python agents/sync_pool.py                 # status: pool vs local squad
+python agents/sync_pool.py --update        # pull new/changed definitions, KEEPING local stats
+python agents/sync_pool.py --promote nome  # publish a local agent definition to the pool (PR)
+python agents/export_fitness.py -u voce    # share anonymous fitness aggregates (PR)
+```
+
+Shared fitness feeds `gene_crossover.py` (ADR-003): the artificial selection learns
+from **every** squad's variance, while nobody's project data leaves their machine.
+CI enforces this: PRs touching `project_ledger/`, `docs/blueprints/`, `agents/active/`
+or `.env` are rejected by the leak-guard workflow.
+
+---
+
 ## Agent Squad
 
 Agents are defined as JSON files in `agents/active/`. Each has a model, tier, specialty, evolution state, and points.
@@ -265,7 +302,14 @@ Full rules in `.governance/hr_policies.md`. Summary:
 
 - **Points:** External (verifiable deliveries) + Internal (squad contributions)
 - **Infractions:** Leve (−1 ext/int) → Média (−2) → Grave (−5) → Crítica (−10 + Blacklist imediata)
-- **Evolution:** `Stable` ↔ `Mutating` ↔ `Degraded` — driven by recent success rate and penalty history
+- **Evolution:** `Stable` ↔ `Mutating` ↔ `Degraded` — decided by the **rolling window** of the
+  last 20 tasks (`fitness_math.py`), never by lifetime average; requires 5+ samples
+- **Fitness (ADR-003):** gene selection ranks by **Wilson lower bound** with a minimum sample
+  size — 100% on 2 tasks loses to 95% on 200
+- **Budget:** spending caps in `.governance/budget.json` (daily/monthly USD); when reached,
+  `call_agent` refuses to fire and logs `BUDGET_BLOCK`
+- **Infra failures:** 429/5xx/timeouts (after 3 retries) log `INFRA_FALHA` and do **not**
+  penalize the agent's success_rate
 - **Dismissal:** Agent JSON moved to `agents/blacklist/`, event recorded in ledger
 
 Model selection rules (what to avoid) are in `.governance/model_caution_list.md`.
@@ -285,23 +329,35 @@ RubberDuckFactory/
 │       ├── doc-handoff/            # Skill: human maintenance entry after agent task
 │       ├── governance-check/       # Skill: infraction classification and promotions
 │       └── ledger-log/             # Skill: how to record events in history.json
+├── .github/workflows/ci.yml        # CI: testes, schemas do pool e leak-guard de PRs
 ├── .governance/
 │   ├── hr_policies.md              # Tier system, points, infractions, dismissal rules
+│   ├── budget.json                 # Tetos de gasto (diário/mensal) aplicados pelo runner
 │   └── model_caution_list.md       # Models to avoid and why
 ├── agents/
-│   ├── active/                     # Live agent JSON configs
-│   └── blacklist/                  # Dismissed agents with cause
+│   ├── pool/                       # GENOMA versionado: definições com stats neutras
+│   ├── active/                     # FENÓTIPO local (gitignored): squad vivo com stats
+│   ├── blacklist/                  # Dismissed agents with cause
+│   ├── sync_pool.py                # Sincroniza pool <-> squad local
+│   └── export_fitness.py           # Export anônimo de fitness p/ community/
 ├── board/                          # Next.js dashboard (Docker multi-stage)
+├── community/fitness/              # Agregados de fitness de todos os squads (versionado)
 ├── docs/
-│   └── ADR-003-*.md                # Architecture Decision Records
+│   └── ADR-00*.md                  # Architecture Decision Records
 ├── orchestrator/                   # TypeScript demo runner
-├── project_ledger/
-│   ├── history.json                # Append-only event log
+├── project_ledger/                 # 100% local (gitignored): dados dos SEUS projetos
+│   ├── history.jsonl               # Fonte de verdade do ledger (append-only, com lock)
+│   ├── history.json                # Visão de compatibilidade (rematerializada)
 │   └── hooks_audit.log             # Hook audit trail (gerado em runtime)
+├── tests/                          # Suíte pytest (ledger, fitness, budget, gate, pool)
+├── tools/check_schemas.py          # Validação de CI (pool + fitness)
 ├── .mcp.json                       # MCP server registration for Claude Code
 ├── CLAUDE.md                       # Orchestration rules and delegation matrix
 ├── docker-compose.yaml             # Full stack definition
+├── fitness_math.py                 # Wilson lower bound + janela deslizante (ADR-003)
+├── ledger_io.py                    # Escrita segura no ledger (lock + JSONL + visão compat)
 ├── quality_gate_server.py          # Quality gate MCP server (host Python, stdio)
+├── rdf_doctor.py                   # Diagnóstico de instalação (onboarding)
 ├── server.py                       # MCP server (FastMCP + uvicorn, Docker)
 └── sovereign_proxy.py              # OpenRouter proxy for agent calls
 ```

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Testes + sintaxe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependências (mínimas para a suíte)
+        run: pip install httpx python-dotenv pytest mcp
+      - name: Sintaxe de todos os .py
+        run: |
+          python -m compileall -q ledger_io.py cost_tracker.py fitness_math.py \
+            quality_gate_server.py sovereign_proxy.py agents/ tools/
+      - name: Suíte de testes
+        run: python -m pytest tests -q
+      - name: Schemas do pool e do fitness da comunidade
+        run: python tools/check_schemas.py
+
+  leak-guard:
+    name: Guard anti-vazamento (PRs)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bloquear dados sensíveis no PR
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED=$(git diff --name-only --diff-filter=ACMR "$BASE" "$HEAD")
+          echo "Arquivos alterados:"; echo "$CHANGED"
+          LEAKS=$(echo "$CHANGED" | grep -E '^(project_ledger/|docs/blueprints/|agents/active/|agents/clearance_memory/)' | grep -v '\.gitkeep$' || true)
+          ENVS=$(echo "$CHANGED" | grep -E '(^|/)\.env(\..*)?$' | grep -v '\.env\.example$' || true)
+          if [ -n "$LEAKS$ENVS" ]; then
+            echo "::error::PR contém arquivos que nunca devem ser versionados (ledger, blueprints, squad local ou .env):"
+            echo "$LEAKS"
+            echo "$ENVS"
+            echo "Estes caminhos são fenótipo local / dados de projeto. Remova-os do PR."
+            exit 1
+          fi
+          echo "Nenhum dado sensível no PR."

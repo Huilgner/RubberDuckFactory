@@ -2,6 +2,10 @@ import fs from "fs";
 import path from "path";
 import AgentCard from "../components/AgentCard";
 
+// Sem isto o Next pre-renderiza a pagina NO BUILD (dentro do container, sem os
+// volumes montados) e o board serve HTML estatico vazio para sempre.
+export const dynamic = "force-dynamic";
+
 type AgentData = {
   name: string;
   tier: number | string;
@@ -50,16 +54,81 @@ async function getBlacklistedAgents(): Promise<AgentData[]> {
   return readAgentsFromDir(agentsDir);
 }
 
-async function getRecentLogs(): Promise<any[]> {
+function readAllLogs(): any[] {
   const ledgerPath = path.resolve(process.cwd(), "..", "project_ledger", "history.json");
   if (!fs.existsSync(ledgerPath)) return [];
   try {
     const data = JSON.parse(fs.readFileSync(ledgerPath, "utf-8"));
-    return (data.logs || []).slice(-5).reverse();
+    return data.logs || [];
   } catch (e) {
     console.error("[BOARD] Failed to read ledger:", e);
     return [];
   }
+}
+
+async function getRecentLogs(): Promise<any[]> {
+  return readAllLogs().slice(-5).reverse();
+}
+
+type ModelCost = { model: string; calls: number; tokens: number; costUsd: number };
+type Telemetry = {
+  totalCostUsd: number;
+  models: ModelCost[];
+  duels: number;
+  infraFailures: number;
+  budgetBlocks: number;
+  lastVerdict: { verdict: string; timestamp?: string; project?: string } | null;
+};
+
+async function getTelemetry(): Promise<Telemetry> {
+  const logs = readAllLogs();
+  const byModel = new Map<string, ModelCost>();
+  let totalCostUsd = 0;
+  let duels = 0;
+  let infraFailures = 0;
+  let budgetBlocks = 0;
+  let lastVerdict: Telemetry["lastVerdict"] = null;
+
+  const addCost = (model: string, tokens: number, costUsd: number) => {
+    const entry = byModel.get(model) ?? { model, calls: 0, tokens: 0, costUsd: 0 };
+    entry.calls += 1;
+    entry.tokens += tokens;
+    entry.costUsd += costUsd;
+    byModel.set(model, entry);
+    totalCostUsd += costUsd;
+  };
+
+  for (const log of logs) {
+    switch (log.type) {
+      case "COST_RECORD":
+        addCost(log.model ?? "?", log.tokens?.total ?? 0, log.cost_usd ?? 0);
+        break;
+      case "DUEL_RUN":
+        duels += 1;
+        break;
+      case "INFRA_FAILURE":
+        infraFailures += 1;
+        break;
+      case "BUDGET_BLOCK":
+        budgetBlocks += 1;
+        break;
+      case "DEPLOY_VERDICT":
+        lastVerdict = { verdict: log.verdict, timestamp: log.timestamp, project: log.project };
+        break;
+    }
+  }
+
+  const models = [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd).slice(0, 8);
+  return { totalCostUsd, models, duels, infraFailures, budgetBlocks, lastVerdict };
+}
+
+function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 p-4">
+      <p className={`text-2xl font-bold ${accent ?? "text-zinc-100"}`}>{value}</p>
+      <p className="mt-1 text-xs uppercase tracking-wider text-zinc-500">{label}</p>
+    </div>
+  );
 }
 
 const LEVEL_0: AgentData[] = [
@@ -84,10 +153,11 @@ function HierarchyDivider({ label, danger }: { label: string; danger?: boolean }
 }
 
 export default async function Home() {
-  const [operationals, blacklisted, recentLogs] = await Promise.all([
+  const [operationals, blacklisted, recentLogs, telemetry] = await Promise.all([
     getActiveAgents(),
     getBlacklistedAgents(),
     getRecentLogs(),
+    getTelemetry(),
   ]);
 
   return (
@@ -131,6 +201,61 @@ export default async function Home() {
           <p className="text-zinc-500">Nenhum agente operacional detectado em /agents/active</p>
         </div>
       )}
+
+      {/* Telemetria — custo, duelos, infra, deploy */}
+      <div className="mt-8 w-full max-w-4xl space-y-4">
+        <HierarchyDivider label="Telemetria · Custo & Operações" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatTile label="Custo total (LLM)" value={`$${telemetry.totalCostUsd.toFixed(4)}`} />
+          <StatTile label="Duelos (ADR-003)" value={String(telemetry.duels)} />
+          <StatTile
+            label="Falhas de infra"
+            value={String(telemetry.infraFailures)}
+            accent={telemetry.infraFailures > 0 ? "text-amber-400" : undefined}
+          />
+          <StatTile
+            label="Último deploy"
+            value={telemetry.lastVerdict?.verdict ?? "—"}
+            accent={
+              telemetry.lastVerdict
+                ? telemetry.lastVerdict.verdict === "GO"
+                  ? "text-emerald-400"
+                  : "text-red-400"
+                : undefined
+            }
+          />
+        </div>
+        {telemetry.budgetBlocks > 0 && (
+          <p className="text-left text-xs text-red-400/80">
+            ⚠ {telemetry.budgetBlocks} chamada(s) bloqueada(s) por teto de orçamento
+            (.governance/budget.json)
+          </p>
+        )}
+        {telemetry.models.length > 0 && (
+          <div className="rounded-xl border border-zinc-900 bg-zinc-900/20 p-4 text-left">
+            <table className="w-full font-mono text-xs">
+              <thead>
+                <tr className="text-zinc-500">
+                  <th className="pb-2 text-left font-normal uppercase tracking-wider">Modelo</th>
+                  <th className="pb-2 text-right font-normal uppercase tracking-wider">Chamadas</th>
+                  <th className="pb-2 text-right font-normal uppercase tracking-wider">Tokens</th>
+                  <th className="pb-2 text-right font-normal uppercase tracking-wider">Custo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {telemetry.models.map((m) => (
+                  <tr key={m.model} className="border-t border-zinc-800/50 text-zinc-300">
+                    <td className="py-1.5 pr-2">{m.model}</td>
+                    <td className="py-1.5 text-right">{m.calls}</td>
+                    <td className="py-1.5 text-right">{m.tokens.toLocaleString()}</td>
+                    <td className="py-1.5 text-right">${m.costUsd.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Project Ledger — Recent Activity */}
       <div className="mt-8 w-full max-w-4xl space-y-4">

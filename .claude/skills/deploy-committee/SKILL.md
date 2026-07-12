@@ -2,8 +2,12 @@
 
 ## Quando usar
 
-Ative esta skill ao preparar um deploy, release ou quality gate de MVP.
-Palavras-chave: "deploy", "release", "produção", "quality gate", "code freeze", "go/no-go", "comitê de revisão".
+> [!CAUTION]
+> **APENAS ative esta skill sob comando explícito e direto do usuário humano** solicitando o início formal do comitê de deploy ou a execução de gates de release (ex: "iniciar comitê de deploy", "rodar quality gate de release", "executar release").
+> 
+> **NÃO ative esta skill de forma automática ou prematura** apenas porque o usuário ou o agente mencionou palavras isoladas como "deploy", "produção", "release" ou "freeze" no meio do desenvolvimento de features, debates arquiteturais ou correções. Ela destina-se estritamente à fase de auditoria pré-release.
+
+Palavras-chave restritas para ativação explícita: "iniciar comitê de deploy", "rodar comitê de liberação", "executar comitê de deploy", "iniciar quality gate".
 
 ---
 
@@ -45,20 +49,26 @@ deploy_verdict(reports=[
   {"agent": "Shadow", "scope": "SecOps", "severity": "<valor>"},
   {"agent": "Atlas",  "scope": "SRE",    "severity": "<valor>"},
   {"agent": "Lens",   "scope": "QA",     "severity": "<valor>"},
-])
+], project="<nome do projeto>")
 ```
 
+O veredito é **persistido automaticamente** no ledger como `DEPLOY_VERDICT` (ADR-004).
+
 **GO** → deploy autorizado, remover freeze: `deploy_freeze(action="unset")`
+> O `unset` **só funciona** se existir um veredito GO emitido DEPOIS do freeze atual —
+> destravar sem comitê exige `deploy_freeze(action="override", reason="<justificativa>")`,
+> que grava `FREEZE_OVERRIDE` auditado no ledger.
+
 **NO_GO** → deploy abortado, freeze mantido, gerar sumário executivo para intervenção humana
 
 ---
 
-## Regras de Bloqueio
+## Regras de Bloqueio (ADR-004 fase 1)
 
 | Severidade | Ação |
 |---|---|
 | OK / LEVE | Deploy autorizado com registro |
-| MÉDIA | Registrar no ledger, deploy pode prosseguir com aprovação explícita |
+| MÉDIA | Registrar no ledger; **3+ achados MÉDIA no total = NO_GO automático** (dívida acumulada) |
 | ALTA | **NO_GO automático** — intervenção obrigatória |
 | CRÍTICA | **NO_GO automático** — intervenção obrigatória + registro de incidente |
 

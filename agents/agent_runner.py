@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,7 +35,9 @@ import httpx
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from cost_tracker import record_cost
+from cost_tracker import record_cost, assert_budget_ok, BudgetExceededError
+from ledger_io import append_history
+from fitness_math import EVOLUTION_WINDOW, rolling_success_rate
 
 # ---------------------------------------------------------------------------
 # Configuracao
@@ -42,18 +45,15 @@ from cost_tracker import record_cost
 
 ROOT_DIR       = Path(__file__).parent.parent
 AGENTS_DIR     = ROOT_DIR / "agents" / "active"
+POOL_DIR       = ROOT_DIR / "agents" / "pool"
 LEDGER_DIR     = ROOT_DIR / "project_ledger"
 FILE_REGISTRY  = LEDGER_DIR / "file_registry.json"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 load_dotenv(ROOT_DIR / ".env")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-
-if not OPENROUTER_API_KEY:
-    raise SystemExit(
-        "OPENROUTER_API_KEY nao encontrada no .env\n"
-        "Preencha o arquivo .env com: OPENROUTER_API_KEY=sk-or-v1-..."
-    )
+# A ausencia da key so falha na hora de CHAMAR um agente (call_agent) --
+# importar o modulo, rodar testes e usar o agente heuristic funcionam sem ela.
 
 # Tokens maximos por modelo -- Gemini 2.5 Pro consome muitos tokens de raciocinio
 MODEL_MAX_TOKENS: dict[str, int] = {
@@ -85,8 +85,29 @@ def _model_rejects_sampling(model: str) -> bool:
 # Carregamento de agentes
 # ---------------------------------------------------------------------------
 
+def _bootstrap_active_from_pool() -> None:
+    """
+    agents/active/ e local (gitignored); agents/pool/ e o genoma versionado.
+    Em um clone novo, inicializa o squad local a partir do pool automaticamente.
+    """
+    if AGENTS_DIR.exists() and any(AGENTS_DIR.glob("*.json")):
+        return
+    if not POOL_DIR.exists():
+        return
+    AGENTS_DIR.mkdir(parents=True, exist_ok=True)
+    seeded = 0
+    for src in sorted(POOL_DIR.glob("*.json")):
+        dst = AGENTS_DIR / src.name
+        if not dst.exists():
+            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            seeded += 1
+    if seeded:
+        print(f"[BOOTSTRAP] Squad local vazio -> {seeded} agente(s) inicializado(s) a partir de agents/pool/")
+
+
 def load_agent(name: str) -> dict:
     """Carrega um agente pelo nome (case-insensitive). Levanta SystemExit se nao encontrado."""
+    _bootstrap_active_from_pool()
     for path in AGENTS_DIR.glob("*.json"):
         try:
             d = json.loads(path.read_text(encoding="utf-8"))
@@ -100,6 +121,7 @@ def load_agent(name: str) -> dict:
 
 def load_all_agents() -> list[dict]:
     """Carrega todos os agentes ativos."""
+    _bootstrap_active_from_pool()
     agents = []
     for path in sorted(AGENTS_DIR.glob("*.json")):
         try:
@@ -151,11 +173,45 @@ def build_system_prompt(agent: dict) -> str:
 # Chamada a API
 # ---------------------------------------------------------------------------
 
-def call_agent(agent: dict, user_message: str, max_tokens: int | None = None) -> dict:
+# Status HTTP transitorios (infra): valem retry e NAO penalizam o agente
+RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+MAX_API_ATTEMPTS = 3
+RETRY_BACKOFF_S  = [2, 5]  # espera antes da 2a e da 3a tentativa
+
+
+def _api_failure(error: str, infra: bool) -> dict:
+    return {
+        "content": "", "finish_reason": "error",
+        "prompt_tokens": 0, "completion_tokens": 0,
+        "success": False, "infra_failure": infra, "error": error,
+    }
+
+
+def call_agent(agent: dict, user_message: str, max_tokens: int | None = None,
+               response_format: dict | None = None) -> dict:
     """
-    Chama o agente via OpenRouter.
-    Retorna: {content, finish_reason, prompt_tokens, completion_tokens, success, error}
+    Chama o agente via OpenRouter, com retry/backoff para falhas transitorias.
+    Retorna: {content, finish_reason, prompt_tokens, completion_tokens,
+              success, infra_failure, error}
+
+    response_format: opcional, ex. {"type": "json_object"} para saida JSON
+    estruturada (modelos que nao suportam retornam 400 -> chamador faz fallback).
+
+    infra_failure=True -> a falha e da infraestrutura (429/5xx/timeout/rede apos
+    retries), nao do modelo. O chamador NAO deve penalizar o agente nesse caso.
     """
+    if not OPENROUTER_API_KEY:
+        raise SystemExit(
+            "OPENROUTER_API_KEY nao encontrada no .env\n"
+            "Preencha o arquivo .env com: OPENROUTER_API_KEY=sk-or-v1-..."
+        )
+
+    # Guardrail de orcamento: teto atingido = nenhuma chamada de API sai
+    try:
+        assert_budget_ok()
+    except BudgetExceededError as e:
+        raise SystemExit(f"[ORCAMENTO] Chamada bloqueada: {e}")
+
     model      = agent.get("model", "deepseek/deepseek-chat")
     system_msg = build_system_prompt(agent)
 
@@ -179,34 +235,52 @@ def call_agent(agent: dict, user_message: str, max_tokens: int | None = None) ->
     # Fable 5 / Opus 4.7+ removeram sampling params -> enviar temperature retorna HTTP 400.
     if not _model_rejects_sampling(model):
         payload["temperature"] = 0.3
+    if response_format:
+        payload["response_format"] = response_format
 
-    try:
-        with httpx.Client(timeout=180.0) as client:
-            resp = client.post(OPENROUTER_URL, headers=headers, json=payload)
-            resp.raise_for_status()
-            data  = resp.json()
-            usage = data.get("usage", {})
-            return {
-                "content":           (data["choices"][0]["message"]["content"] or "").strip(),
-                "finish_reason":     data["choices"][0].get("finish_reason", "?"),
-                "prompt_tokens":     usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "success":           True,
-                "error":             None,
-            }
-    except httpx.HTTPStatusError as e:
-        return {
-            "content": "", "finish_reason": "error",
-            "prompt_tokens": 0, "completion_tokens": 0,
-            "success": False,
-            "error": f"HTTP {e.response.status_code}: {e.response.text[:300]}",
-        }
-    except Exception as e:
-        return {
-            "content": "", "finish_reason": "error",
-            "prompt_tokens": 0, "completion_tokens": 0,
-            "success": False, "error": str(e),
-        }
+    last_error = ""
+    for attempt in range(1, MAX_API_ATTEMPTS + 1):
+        try:
+            with httpx.Client(timeout=180.0) as client:
+                resp = client.post(OPENROUTER_URL, headers=headers, json=payload)
+
+                if resp.status_code in RETRYABLE_STATUS:
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                    if attempt < MAX_API_ATTEMPTS:
+                        wait = RETRY_BACKOFF_S[attempt - 1]
+                        print(f"  [RETRY] {last_error[:80]} -> tentativa {attempt + 1}/{MAX_API_ATTEMPTS} em {wait}s")
+                        time.sleep(wait)
+                        continue
+                    return _api_failure(f"{last_error} (apos {MAX_API_ATTEMPTS} tentativas)", infra=True)
+
+                resp.raise_for_status()
+                data  = resp.json()
+                usage = data.get("usage", {})
+                return {
+                    "content":           (data["choices"][0]["message"]["content"] or "").strip(),
+                    "finish_reason":     data["choices"][0].get("finish_reason", "?"),
+                    "prompt_tokens":     usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "success":           True,
+                    "infra_failure":     False,
+                    "error":             None,
+                }
+        except httpx.HTTPStatusError as e:
+            # 4xx nao-transitorio (payload invalido, modelo inexistente, auth):
+            # falha imediata, atribuivel a configuracao/modelo -- sem retry.
+            return _api_failure(f"HTTP {e.response.status_code}: {e.response.text[:300]}", infra=False)
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            last_error = f"{type(e).__name__}: {e}"
+            if attempt < MAX_API_ATTEMPTS:
+                wait = RETRY_BACKOFF_S[attempt - 1]
+                print(f"  [RETRY] {last_error[:80]} -> tentativa {attempt + 1}/{MAX_API_ATTEMPTS} em {wait}s")
+                time.sleep(wait)
+                continue
+            return _api_failure(f"{last_error} (apos {MAX_API_ATTEMPTS} tentativas)", infra=True)
+        except Exception as e:
+            return _api_failure(str(e), infra=False)
+
+    return _api_failure(last_error or "falha desconhecida", infra=True)
 
 
 # ---------------------------------------------------------------------------
@@ -227,16 +301,17 @@ def _ts() -> str:
 
 def _append_ledger(entry: dict) -> None:
     ledger = LEDGER_DIR / "agent_ledger.log"
-    if not ledger.exists():
-        return
+    ledger.parent.mkdir(parents=True, exist_ok=True)
     with open(ledger, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 def update_agent_stats(agent: dict, technical_success: bool) -> dict:
     """
-    Incrementa tasks_completed ou tasks_failed, recalcula success_rate,
-    aplica transicao de evolucao se necessario. Retorna o dict atualizado.
+    Incrementa tasks_completed ou tasks_failed, recalcula success_rate (vitalicio,
+    historico) e aplica transicao de evolucao pela JANELA DESLIZANTE das ultimas
+    tarefas (fitness_math.EVOLUTION_WINDOW) -- 10 falhas recentes nao podem ser
+    diluidas por 200 acertos antigos. Retorna o dict atualizado.
     """
     file_path = Path(agent["_file"])
     d = json.loads(file_path.read_text(encoding="utf-8"))
@@ -250,9 +325,15 @@ def update_agent_stats(agent: dict, technical_success: bool) -> dict:
     if total > 0:
         d["success_rate"] = round(d["tasks_completed"] / total * 100, 1)
 
-    # Transicao de evolucao automatica
-    new_evolution = _compute_evolution(float(d.get("success_rate", 100)))
+    # Janela deslizante: 0/1 por tarefa, mais recente por ultimo
+    recent = list(d.get("recent_results", []))
+    recent.append(1 if technical_success else 0)
+    d["recent_results"] = recent[-EVOLUTION_WINDOW:]
+
+    # Transicao de evolucao pela janela (exige amostra minima; antes disso mantem o estado)
+    window_sr = rolling_success_rate(d["recent_results"])
     old_evolution = d.get("evolution", "Stable")
+    new_evolution = _compute_evolution(window_sr) if window_sr is not None else old_evolution
     if new_evolution != old_evolution:
         d["evolution"] = new_evolution
         _append_ledger({
@@ -262,10 +343,12 @@ def update_agent_stats(agent: dict, technical_success: bool) -> dict:
             "from":         old_evolution,
             "to":           new_evolution,
             "success_rate": d.get("success_rate"),
-            "trigger":      "agent_runner_pos_tarefa",
+            "window_sr":    window_sr,
+            "window_n":     len(d["recent_results"]),
+            "trigger":      "agent_runner_janela_deslizante",
         })
         print(f"[EVOLUCAO] {d.get('nome','?')}: {old_evolution} -> {new_evolution} "
-              f"(sr={d.get('success_rate')}%)")
+              f"(janela={window_sr}% em {len(d['recent_results'])} tarefas | vitalicio={d.get('success_rate')}%)")
 
     file_path.write_text(json.dumps(d, indent=2, ensure_ascii=False), encoding="utf-8")
     return d
@@ -288,24 +371,44 @@ def write_task_ledger(agent: dict, success: bool, task: str, project: str,
 
 
 def write_history(agent: dict, success: bool, task: str, error: str = "") -> None:
-    """Escreve TASK_SUCCESS ou TASK_FAILURE no history.json."""
-    history_file = LEDGER_DIR / "history.json"
+    """Escreve TASK_SUCCESS ou TASK_FAILURE no historico (via ledger_io, sob lock)."""
+    entry: dict = {
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "type":      "TASK_SUCCESS" if success else "TASK_FAILURE",
+        "agent":     agent.get("nome", "?"),
+        "task":      task[:200],
+    }
+    if not success and error:
+        entry["reason"] = error[:200]
     try:
-        data = json.loads(history_file.read_text(encoding="utf-8"))
-        if "logs" not in data:
-            data["logs"] = []
-        entry: dict = {
+        append_history(entry)
+    except Exception as e:
+        print(f"  [WARNING] Nao foi possivel gravar no historico: {e}")
+
+
+def write_infra_event(agent: dict, task: str, error: str, project: str = "") -> None:
+    """
+    Registra falha de INFRAESTRUTURA (API fora, 429/5xx, timeout apos retries).
+    Evento separado de TAREFA_FALHA/TASK_FAILURE: nao conta contra o
+    success_rate do agente -- a falha nao e atribuivel ao modelo.
+    """
+    _append_ledger({
+        "ts":      _ts(),
+        "type":    "INFRA_FALHA",
+        "agent":   agent.get("nome", "?"),
+        "project": project or "n/a",
+        "reason":  (error or "")[:200],
+    })
+    try:
+        append_history({
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-            "type":      "TASK_SUCCESS" if success else "TASK_FAILURE",
+            "type":      "INFRA_FAILURE",
             "agent":     agent.get("nome", "?"),
             "task":      task[:200],
-        }
-        if not success and error:
-            entry["reason"] = error[:200]
-        data["logs"].append(entry)
-        history_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            "reason":    (error or "")[:200],
+        })
     except Exception as e:
-        print(f"  [WARNING] Nao foi possivel gravar em history.json: {e}")
+        print(f"  [WARNING] Nao foi possivel gravar no historico: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -745,24 +848,142 @@ def execute_heuristic_task(task: str) -> dict:
 
 
 def parse_and_execute_dsl(dsl_text: str) -> list[str]:
-    """Parseia a Mini-DSL e escreve os arquivos contidos."""
+    """Parseia a Mini-DSL e escreve os arquivos contidos (restritos a raiz do projeto)."""
     import re
     written_files = []
     pattern = r"\[FILE:\s*(.+?)\]\s*\[CONTENT\](.*?)\[END_CONTENT\]"
     matches = re.findall(pattern, dsl_text, re.DOTALL)
-    
+
+    project_root = ROOT_DIR.resolve()
     for filename, content in matches:
         filename = filename.strip()
         content = content.strip()
-        filepath = ROOT_DIR / filename
+        filepath = (ROOT_DIR / filename).resolve()
+        # Guardrail: output do LLM nao pode escrever fora da raiz do projeto
+        if not filepath.is_relative_to(project_root):
+            print(f"  [BLOQUEADO] DSL tentou escrever fora do projeto: {filename}")
+            continue
         try:
             filepath.parent.mkdir(parents=True, exist_ok=True)
             filepath.write_text(content, encoding="utf-8")
             written_files.append(filename)
         except Exception as e:
             print(f"  [WARNING] Erro ao escrever arquivo {filename} via DSL: {e}")
-            
+
     return written_files
+
+
+def validate_artifacts(paths: list[str]) -> tuple[bool, list[dict]]:
+    """
+    Validacao deterministica dos artefatos gerados por agente (ADR-003: sinal
+    de sucesso tecnico baseado em verificacao, nao em "respondeu algo").
+
+      .py            -> compile() (checagem de sintaxe)
+      .json          -> json.loads
+      .yaml / .yml   -> yaml.safe_load (se pyyaml disponivel)
+      .js/.mjs/.cjs  -> node --check (se node disponivel)
+      outros         -> 'skipped' (sem validador deterministico)
+
+    Retorna (todos_validos, [{file, status, detail}, ...]).
+    'skipped' nao reprova; apenas 'fail' derruba o sucesso tecnico.
+    """
+    results: list[dict] = []
+    all_ok = True
+
+    for rel in paths:
+        fp = ROOT_DIR / rel
+        ext = fp.suffix.lower()
+        status, detail = "skipped", ""
+        try:
+            src = fp.read_text(encoding="utf-8")
+            if ext == ".py":
+                compile(src, str(fp), "exec")
+                status = "ok"
+            elif ext == ".json":
+                json.loads(src)
+                status = "ok"
+            elif ext in (".yaml", ".yml"):
+                try:
+                    import yaml
+                    yaml.safe_load(src)
+                    status = "ok"
+                except ImportError:
+                    detail = "pyyaml nao instalado"
+            elif ext in (".js", ".mjs", ".cjs"):
+                import shutil
+                import subprocess
+                node = shutil.which("node")
+                if node:
+                    r = subprocess.run([node, "--check", str(fp)],
+                                       capture_output=True, text=True, timeout=15)
+                    if r.returncode == 0:
+                        status = "ok"
+                    else:
+                        status, detail = "fail", (r.stderr or r.stdout)[:200]
+                else:
+                    detail = "node nao encontrado"
+        except SyntaxError as e:
+            status, detail = "fail", f"sintaxe invalida: {e}"
+        except json.JSONDecodeError as e:
+            status, detail = "fail", f"JSON invalido: {e}"
+        except Exception as e:
+            status, detail = "fail", str(e)[:200]
+
+        if status == "fail":
+            all_ok = False
+        results.append({"file": rel, "status": status, "detail": detail})
+
+    return all_ok, results
+
+
+MAX_CONTEXT_PER_FILE = 8_000    # chars por arquivo injetado no briefing
+MAX_CONTEXT_TOTAL    = 24_000   # chars totais de contexto de arquivos
+
+
+def build_files_context(files: list[str] | None) -> str:
+    """
+    Injeta o CONTEUDO dos arquivos existentes de --files no briefing, para o
+    agente enxergar o codigo que vai modificar (agentes cegos sao a causa raiz
+    de alucinacao tipo 'caso Echo'). Arquivos inexistentes sao ignorados em
+    silencio -- presume-se que sao saidas a criar. Caps de tamanho evitam
+    estourar o orcamento de tokens.
+    """
+    if not files:
+        return ""
+    project_root = ROOT_DIR.resolve()
+    blocks: list[str] = []
+    used = 0
+    for rel in files:
+        rel = rel.strip()
+        if not rel:
+            continue
+        fp = (ROOT_DIR / rel).resolve()
+        if not fp.is_relative_to(project_root) or not fp.is_file():
+            continue
+        try:
+            content = fp.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        truncated = len(content) > MAX_CONTEXT_PER_FILE
+        content = content[:MAX_CONTEXT_PER_FILE]
+        if used + len(content) > MAX_CONTEXT_TOTAL:
+            content = content[: max(0, MAX_CONTEXT_TOTAL - used)]
+            truncated = True
+        if not content:
+            break
+        used += len(content)
+        note = " (TRUNCADO)" if truncated else ""
+        blocks.append(f"--- {rel}{note} ---\n{content}")
+        if used >= MAX_CONTEXT_TOTAL:
+            break
+    if not blocks:
+        return ""
+    return (
+        "### CONTEXTO — CONTEUDO ATUAL DOS ARQUIVOS ENVOLVIDOS ###\n"
+        "Baseie-se EXATAMENTE neste conteudo; nao invente codigo que nao esta aqui.\n\n"
+        + "\n\n".join(blocks)
+        + "\n### FIM DO CONTEXTO ###\n\n"
+    )
 
 
 def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None, use_rag: bool = False, use_dsl: bool = False) -> None:
@@ -855,7 +1076,13 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
         if rag_context:
             print(f"[RAG] Contexto semântico injetado.")
 
-    full_task = rag_context + task if rag_context else task
+    # 3b. Contexto dos arquivos de --files: o agente ve o codigo que vai tocar
+    files_context = "" if is_heuristic else build_files_context(files)
+    if files_context:
+        print(f"[CONTEXTO] {files_context.count('--- ')} arquivo(s) injetado(s) no briefing "
+              f"({len(files_context)} chars)")
+
+    full_task = files_context + rag_context + task if (rag_context or files_context) else task
 
     # 4. LLM-DSL Instruction appending
     if use_dsl:
@@ -888,8 +1115,46 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
         resultado = execute_heuristic_task(task)
     else:
         resultado = call_agent(agent, full_task)
-        
-    technical_success = resultado["success"]
+
+    # 5a. Falha de infraestrutura (429/5xx/timeout apos retries): registra evento
+    # proprio e NAO penaliza o agente -- a falha nao e atribuivel ao modelo.
+    if resultado.get("infra_failure"):
+        print(f"[INFRA] Falha de infraestrutura: {resultado.get('error')}")
+        print("  Evento INFRA_FALHA registrado. Stats do agente preservados.")
+        write_infra_event(agent, task, resultado.get("error") or "", project)
+        sys.exit(1)
+
+    technical_success = bool(resultado["success"])
+
+    # 5b. Resposta truncada nao e entrega valida
+    if technical_success and not is_heuristic and resultado.get("finish_reason") == "length":
+        technical_success = False
+        resultado["error"] = "saida truncada (finish_reason=length)"
+        print("  [VALIDACAO] Resposta truncada pelo limite de tokens -> tarefa marcada como falha.")
+
+    # 5c. DSL: parse + validacao deterministica ANTES de computar stats,
+    # para que o sinal de sucesso reflita artefatos verificados (nao so "respondeu").
+    written: list[str] = []
+    if technical_success and not is_heuristic and use_dsl:
+        written = parse_and_execute_dsl(resultado["content"])
+        if written:
+            all_ok, val_results = validate_artifacts(written)
+            for v in val_results:
+                mark = {"ok": "✅", "fail": "❌", "skipped": "—"}.get(v["status"], "?")
+                extra = f" ({v['detail']})" if v["detail"] else ""
+                print(f"  [VALIDACAO] {mark} {v['file']}: {v['status']}{extra}")
+            if not all_ok:
+                technical_success = False
+                bad = ", ".join(f"{v['file']}: {v['detail']}" for v in val_results if v["status"] == "fail")
+                resultado["error"] = f"artefato invalido -> {bad}"[:300]
+            else:
+                print(f"  [DSL PARSER] ✅ Arquivos gerados via DSL: {', '.join(written)}")
+                if files is None:
+                    files = []
+                files.extend(written)
+        else:
+            technical_success = False
+            resultado["error"] = "modo DSL ativo mas nenhum bloco [FILE:...] valido na resposta"
 
     # Custo
     record_cost(
@@ -908,20 +1173,11 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
         write_task_ledger(agent, technical_success, task, project, resultado.get("error") or "")
         write_history(agent, technical_success, task, resultado.get("error") or "")
 
-    # Assinatura RAG + file registry + cache semântico
+    # Assinatura RAG + file registry + cache semântico (so para entregas validadas --
+    # nunca cachear/assinar output reprovado na validacao)
     if technical_success and not is_heuristic:
         write_rag_signature(agent, task, resultado["content"], project)
         store_semantic_cache(nome, task, resultado["content"], project)
-        
-        # DSL Parsing se ativado
-        if use_dsl:
-            written = parse_and_execute_dsl(resultado["content"])
-            if written:
-                print(f"  [DSL PARSER] ✅ Arquivos gerados via DSL: {', '.join(written)}")
-                if files is None:
-                    files = []
-                files.extend(written)
-
         if files:
             update_file_registry(files, agent, project)
 

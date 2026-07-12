@@ -7,10 +7,10 @@
   "status": "active",
   "evolution": "Stable",
   "success_rate": 100.0,
+  "tasks_completed": 0,
+  "tasks_failed": 0,
   "pontos": {
     "externos": 0,
     "internos": 0
-  },
-  "tasks_completed": 3,
-  "tasks_failed": 0
+  }
 }

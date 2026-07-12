@@ -21,16 +21,14 @@ ROOT_DIR = Path(__file__).parent.parent
 LEDGER_DIR = ROOT_DIR / "project_ledger"
 BLACKBOARD_FILE = LEDGER_DIR / "negotiation_blackboard.json"
 
+sys.path.insert(0, str(ROOT_DIR))
+from ledger_io import append_history
+
 def write_history(entry: dict) -> None:
-    history_file = LEDGER_DIR / "history.json"
-    if not history_file.exists():
-        return
     try:
-        data = json.loads(history_file.read_text(encoding="utf-8"))
-        data.setdefault("logs", []).append(entry)
-        history_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        append_history(entry)
     except Exception as e:
-        print(f"  [WARNING] Não foi possível escrever no history.json: {e}")
+        print(f"  [WARNING] Não foi possível escrever no histórico: {e}")
 
 def main():
     parser = argparse.ArgumentParser(

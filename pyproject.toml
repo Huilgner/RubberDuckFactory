@@ -12,3 +12,8 @@ dependencies = [
   "qdrant-client>=1.18.0",
   "mcp>=1.27.1",
 ]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]

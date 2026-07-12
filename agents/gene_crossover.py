@@ -19,6 +19,12 @@ ROOT_DIR   = Path(__file__).parent.parent
 AGENTS_DIR = ROOT_DIR / "agents" / "active"
 LEDGER_DIR = ROOT_DIR / "project_ledger"
 
+sys.path.insert(0, str(ROOT_DIR))
+from ledger_io import append_history
+from fitness_math import MIN_SAMPLES_GENE_POOL, fitness_score
+
+COMMUNITY_DIR = ROOT_DIR / "community" / "fitness"
+
 def load_all_agents() -> list[dict]:
     """Carrega todos os agentes ativos."""
     agents = []
@@ -39,33 +45,78 @@ def get_gene_pool(agents: list[dict]) -> list[dict]:
         pool = [a for a in agents if a.get("status") == "active"]
     return pool
 
-def select_best_genes(pool: list[dict]) -> tuple[str, str]:
-    """Seleciona as melhores configurações (modelo + ruleset) a partir do pool genético."""
-    if not pool:
-        # Fallbacks universais caso não haja agentes
-        return "google/gemini-2.5-flash", "v1"
+def load_community_fitness() -> tuple[dict, dict]:
+    """
+    Agrega os exports anônimos de community/fitness/*.json (schema rdf-fitness/1).
+    Retorna (model -> {ok, fail}, ruleset -> {ok, fail}) somando tarefas e duelos
+    de TODOS os squads que contribuíram — a evolução vira global sem que nenhum
+    dado de projeto saia da máquina de ninguém.
+    """
+    models: dict[str, dict] = {}
+    rulesets: dict[str, dict] = {}
+    if not COMMUNITY_DIR.exists():
+        return models, rulesets
+    for f in sorted(COMMUNITY_DIR.glob("*.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if data.get("schema") != "rdf-fitness/1":
+            continue
+        for section, store in (("models", models), ("rulesets", rulesets)):
+            for key, b in data.get(section, {}).items():
+                agg = store.setdefault(key, {"ok": 0, "fail": 0})
+                agg["ok"]   += int(b.get("tasks_ok", 0) or 0)
+                agg["fail"] += int(b.get("tasks_fail", 0) or 0)
+                duel_runs = int(b.get("duel_runs", 0) or 0)
+                duel_ok   = int(b.get("duel_ok", 0) or 0)
+                agg["ok"]   += duel_ok
+                agg["fail"] += max(0, duel_runs - duel_ok)
+    return models, rulesets
 
-    # Seleciona o melhor modelo com base na maior taxa de sucesso média dos agentes que o utilizam
-    model_stats = {}
-    for agent in pool:
-        model = agent.get("model")
-        sr = agent.get("success_rate", 0.0)
-        if model:
-            stats = model_stats.setdefault(model, [])
-            stats.append(sr)
 
-    best_model = max(model_stats.keys(), key=lambda m: sum(model_stats[m])/len(model_stats[m]))
+def select_best_genes(agents: list[dict]) -> tuple[str, str]:
+    """
+    Seleciona modelo + ruleset por EVIDÊNCIA, não por média ingênua:
+      - combina contagens locais (tasks_completed/failed dos agentes) com o
+        fitness agregado da comunidade (community/fitness/);
+      - só considera genes com amostra mínima (MIN_SAMPLES_GENE_POOL);
+      - ranqueia pelo limite inferior de Wilson (fitness_score), que penaliza
+        pouca evidência: 2/2 (100%) perde de 190/200 (95%).
+    Fallback: sem nenhum gene qualificado, usa o melhor disponível por Wilson
+    mesmo abaixo da amostra mínima; sem dado nenhum, defaults universais.
+    """
+    model_ev, ruleset_ev = load_community_fitness()
 
-    # Seleciona a melhor versão de ruleset com base no maior success_rate médio
-    ruleset_stats = {}
-    for agent in pool:
-        rs = agent.get("ruleset_version")
-        sr = agent.get("success_rate", 0.0)
-        if rs:
-            stats = ruleset_stats.setdefault(rs, [])
-            stats.append(sr)
+    for agent in agents:
+        ok   = int(agent.get("tasks_completed", 0) or 0)
+        fail = int(agent.get("tasks_failed", 0) or 0)
+        if model := agent.get("model"):
+            b = model_ev.setdefault(model, {"ok": 0, "fail": 0})
+            b["ok"] += ok
+            b["fail"] += fail
+        if rs := agent.get("ruleset_version"):
+            b = ruleset_ev.setdefault(rs, {"ok": 0, "fail": 0})
+            b["ok"] += ok
+            b["fail"] += fail
 
-    best_ruleset = max(ruleset_stats.keys(), key=lambda r: sum(ruleset_stats[r])/len(ruleset_stats[r]))
+    def best(evidence: dict, default: str) -> tuple[str, float, int, bool]:
+        scored = [(key, fitness_score(b["ok"], b["ok"] + b["fail"]), b["ok"] + b["fail"])
+                  for key, b in evidence.items() if (b["ok"] + b["fail"]) > 0]
+        if not scored:
+            return default, 0.0, 0, False
+        qualified = [s for s in scored if s[2] >= MIN_SAMPLES_GENE_POOL]
+        pool = qualified or scored
+        key, score, n = max(pool, key=lambda s: s[1])
+        return key, score, n, bool(qualified)
+
+    best_model, m_score, m_n, m_q = best(model_ev, "google/gemini-2.5-flash")
+    best_ruleset, r_score, r_n, r_q = best(ruleset_ev, "v1")
+
+    print(f"  [FITNESS] modelo  : {best_model} (Wilson={m_score}, n={m_n}"
+          + ("" if m_q else f", ABAIXO da amostra minima de {MIN_SAMPLES_GENE_POOL}") + ")")
+    print(f"  [FITNESS] ruleset : {best_ruleset} (Wilson={r_score}, n={r_n}"
+          + ("" if r_q else f", ABAIXO da amostra minima de {MIN_SAMPLES_GENE_POOL}") + ")")
 
     return best_model, best_ruleset
 
@@ -77,15 +128,10 @@ def write_ledger(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 def write_history(entry: dict) -> None:
-    history_file = LEDGER_DIR / "history.json"
-    if not history_file.exists():
-        return
     try:
-        data = json.loads(history_file.read_text(encoding="utf-8"))
-        data.setdefault("logs", []).append(entry)
-        history_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        append_history(entry)
     except Exception as e:
-        print(f"  [WARNING] Não foi possível escrever no history.json: {e}")
+        print(f"  [WARNING] Não foi possível escrever no histórico: {e}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -111,8 +157,8 @@ def main():
     print(f"Squad atual: {len(all_agents)} agentes.")
     print(f"Piscina Genética de Alto Fitness (Stable & sr >= 85%): {[a.get('nome') for a in pool]}")
 
-    # 2. Realiza crossover ou usa overrides
-    best_model, best_ruleset = select_best_genes(pool)
+    # 2. Realiza crossover por evidência (local + community/fitness) ou usa overrides
+    best_model, best_ruleset = select_best_genes(all_agents)
     final_model = args.model if args.model else best_model
     final_ruleset = args.ruleset if args.ruleset else best_ruleset
 

@@ -1,0 +1,6 @@
+{
+  "_doc": "Teto de gastos com LLM (USD). Aplicado por cost_tracker.assert_budget_ok() antes de cada chamada de API. enforce=false apenas avisa, sem bloquear.",
+  "daily_usd": 5.0,
+  "monthly_usd": 50.0,
+  "enforce": true
+}

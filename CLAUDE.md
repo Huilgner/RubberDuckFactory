@@ -62,6 +62,14 @@ When Docker is running (`docker compose up -d` in `C:\RubberDuckFactory`), the M
 Agent config files live in `agents/active/`. Dismissed agents are in `agents/blacklist/`.
 Fonte de verdade é sempre `agents/active/` — consulte o JSON antes de delegar (model/evolution/success_rate podem ter mudado).
 
+### Propagação multiusuário — genoma no git, fenótipo local
+
+- `agents/pool/` (VERSIONADO) = definições compartilháveis com stats neutras.
+- `agents/active/` (GITIGNORED) = squad vivo local; bootstrap automático a partir do pool no primeiro uso.
+- `project_ledger/` e `docs/blueprints/` são SEMPRE locais (dados sensíveis de projeto) — o CI tem leak-guard que rejeita PRs tocando esses caminhos.
+- Sincronização: `python agents/sync_pool.py [--update|--promote NOME]`. Fitness anônimo para a comunidade: `python agents/export_fitness.py -u nome` → `community/fitness/` (PR).
+- Diagnóstico de instalação: `python rdf_doctor.py --fix`.
+
 ### Agentes de mesma função — dispatch competitivo (ADR-003)
 
 Quando vários agentes cobrem a mesma função (ex.: frontend → Nova, Iris, Neo), **não os escolha a dedo** pela tabela acima. Eles formam um **pool competitivo**: para cada tarefa, o `duel_runner.py` decide qual(is) executa(m), de forma parcialmente randomizada, gerando variância de fitness **por modelo**. Esses dados alimentam o `gene_crossover.py` (ADR-003), que aprende quais combinações modelo+ruleset entregam qualidade e quais degradam — guiando a criação dos agentes futuros e revelando "mutações"/erros.
@@ -109,10 +117,18 @@ If a task fits both categories, delegate only the **generation step** and handle
 Full rules in `.governance/hr_policies.md`. Key points:
 
 - Points are **External** (verifiable deliveries) and **Internal** (squad contributions)
-- Evolution states: `Stable` → `Mutating` → `Degraded`
+- Evolution states: `Stable` → `Mutating` → `Degraded` — decididos pela **janela deslizante**
+  das últimas 20 tarefas (`recent_results` no JSON do agente, mínimo 5 amostras), não pela média vitalícia
+- Fitness (ADR-003): seleção por **Wilson lower bound** + amostra mínima (`fitness_math.py`) —
+  nunca por média simples
 - Infractions: Leve (−1 ext/int), Média (−2), Grave (−5), Crítica (−10 + Blacklist imediata)
+- **Orçamento**: tetos em `.governance/budget.json`; estourou → `call_agent` bloqueia e grava `BUDGET_BLOCK`
+- **Falha de infra** (429/5xx/timeout após 3 retries) gera `INFRA_FALHA` e NÃO penaliza o agente
 - Dismissal moves agent JSON to `agents/blacklist/` with a dismissal report
-- Ledger of all actions in `history.json` — append-only, never edit past entries
+- Ledger: fonte de verdade em `project_ledger/history.jsonl` (append-only, lock inter-processo via
+  `ledger_io.py`); `history.json` é visão de compatibilidade — nunca escreva nos dois diretamente,
+  use `ledger_io.append_history()`
+- Testes: `python -m pytest tests -q` (28+ testes; CI roda em todo push/PR)
 
 ---
 
@@ -199,10 +215,14 @@ Ao ser acionado para preparar ou finalizar um deploy de MVP, o orquestrador atua
 1. Ativar Code Freeze via MCP: `deploy_freeze(action="set")`
 2. Invocar em paralelo: **Shadow** (SecOps) + **Atlas** (SRE) + **Lens** (QA)
 3. Aguardar relatórios estruturados de cada especialista
-4. Emitir veredito: `deploy_verdict(reports=[...])`
-5. **GO** → remover freeze. **NO_GO** → manter freeze + sumário executivo para intervenção humana
+4. Emitir veredito: `deploy_verdict(reports=[...], project="nome")` — persistido como
+   `DEPLOY_VERDICT` no ledger
+5. **GO** → `deploy_freeze(action="unset")` (só funciona com GO emitido APÓS o freeze atual).
+   **NO_GO** → manter freeze + sumário executivo para intervenção humana
 
-Deploy em produção só é autorizado com **aprovação unânime e sem apontamentos ALTA/CRÍTICA** do comitê.
+Regras do veredito (ADR-004 fase 1): ALTA/CRÍTICA bloqueia; **3+ achados MÉDIA também bloqueiam**
+(dívida acumulada). Destravar sem GO exige `deploy_freeze(action="override", reason="...")` —
+a justificativa é auditada no ledger (`FREEZE_OVERRIDE`).
 
 ---
 

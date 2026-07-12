@@ -37,9 +37,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))   # cost_tracker
 
 from agent_runner import (
     load_agent, call_agent, update_agent_stats,
-    write_task_ledger, write_history,
+    write_task_ledger, write_history, write_infra_event,
 )
 from cost_tracker import record_cost, calculate_cost
+from ledger_io import append_history
 
 ROOT_DIR   = Path(__file__).parent.parent
 LEDGER_DIR = ROOT_DIR / "project_ledger"
@@ -47,7 +48,22 @@ ROSTER     = Path(__file__).parent / "duel_roster.json"
 STATE      = LEDGER_DIR / "duel_state.json"
 DUELS_DIR  = LEDGER_DIR / "duels"
 
-JUDGE_MODEL = "deepseek/deepseek-chat"  # barato; usado so com --judge
+# Candidatos a juiz (baratos), em ordem de preferencia. O juiz escolhido e
+# sempre de FAMILIA (provider) diferente de todos os competidores do duelo --
+# modelos tem autopreferencia documentada ao julgar a propria familia.
+JUDGE_CANDIDATES = [
+    "minimax/minimax-m2",
+    "deepseek/deepseek-chat",
+    "google/gemini-2.5-flash-lite",
+]
+
+
+def pick_judge_model(runs: list[dict]) -> str:
+    families = {r.get("model", "").split("/")[0] for r in runs}
+    for cand in JUDGE_CANDIDATES:
+        if cand.split("/")[0] not in families:
+            return cand
+    return JUDGE_CANDIDATES[0]  # todos conflitam: usa o preferido mesmo assim
 
 COMPLEX_KEYWORDS = [
     "complex", "arquitet", "refator", "integr", "seguran", "security",
@@ -138,16 +154,24 @@ def run_one(agent: dict, task: str, record_stats: bool) -> dict:
     technical_success = bool(res.get("success")) and len(content.strip()) >= 40 and not truncated
     cost = calculate_cost(model, pin, pout)
 
-    if record_stats and res.get("success"):
-        record_cost(name, model, task[:120], pin, pout)
-        update_agent_stats(agent, technical_success)
-        write_task_ledger(agent, technical_success, task, "duel")
-        write_history(agent, technical_success, task,
-                      "" if technical_success else (res.get("error") or "saida incompleta"))
+    infra_failure = bool(res.get("infra_failure"))
+    if record_stats:
+        if infra_failure:
+            # Falha de infra (429/5xx/timeout apos retries): evento proprio,
+            # nao penaliza o agente -- falha nao atribuivel ao modelo.
+            write_infra_event(agent, task, res.get("error") or "", "duel")
+            print(f"    [INFRA] {name}: falha de infraestrutura, stats preservados")
+        elif res.get("success"):
+            record_cost(name, model, task[:120], pin, pout)
+            update_agent_stats(agent, technical_success)
+            write_task_ledger(agent, technical_success, task, "duel")
+            write_history(agent, technical_success, task,
+                          "" if technical_success else (res.get("error") or "saida incompleta"))
 
     return {
         "agent": name, "model": model,
         "success": res.get("success"), "technical_success": technical_success,
+        "infra_failure": infra_failure,
         "truncated": truncated, "finish_reason": res.get("finish_reason"),
         "chars": len(content), "prompt_tokens": pin, "completion_tokens": pout,
         "cost_usd": cost, "error": res.get("error"), "content": content,
@@ -164,24 +188,55 @@ def divergence(a: str, b: str) -> dict:
 
 
 def judge_outputs(task: str, runs: list[dict]) -> dict:
-    """Juiz barato escolhe o melhor output (so com --judge)."""
-    judge = {"nome": "Judge", "model": JUDGE_MODEL,
+    """
+    Juiz barato escolhe o melhor output (so com --judge).
+    Mitigacoes de vies:
+      - juiz de familia diferente dos competidores (pick_judge_model);
+      - candidatos EMBARALHADOS e anonimos (sem nome de agente/modelo no prompt)
+        contra vies de posicao e de marca;
+      - response_format json_object, com fallback para parse manual.
+    """
+    judge_model = pick_judge_model(runs)
+    judge = {"nome": "Judge", "model": judge_model,
              "system_prompt": "Voce e um avaliador imparcial de qualidade de codigo/entregas. "
                               "Responda SOMENTE JSON."}
+
+    order = list(range(len(runs)))
+    random.shuffle(order)
     blocks = "\n\n".join(
-        f"### CANDIDATO {i+1} (agente {r['agent']}, modelo {r['model']})\n{r['content'][:4000]}"
-        for i, r in enumerate(runs)
+        f"### CANDIDATO {pos+1}\n{runs[orig]['content'][:4000]}"
+        for pos, orig in enumerate(order)
     )
     prompt = (f"Tarefa:\n{task}\n\n{blocks}\n\n"
               f'Avalie corretude, completude e ausencia de alucinacao. Responda JSON: '
               f'{{"winner": <numero 1..{len(runs)}>, "scores": [n1,...], "motivo": "..."}}')
-    res = call_agent(judge, prompt, max_tokens=500)
+
+    res = call_agent(judge, prompt, max_tokens=500, response_format={"type": "json_object"})
+    if not res.get("success"):
+        # modelo pode nao suportar response_format (HTTP 400) -> tenta sem
+        res = call_agent(judge, prompt, max_tokens=500)
+
     try:
         txt = res["content"]
         txt = txt[txt.find("{"): txt.rfind("}") + 1]
-        return json.loads(txt)
+        verdict = json.loads(txt)
+        # des-embaralha: winner na ordem apresentada -> indice original
+        pos = int(verdict.get("winner", 0)) - 1
+        if 0 <= pos < len(order):
+            orig = order[pos]
+            verdict["winner"] = orig + 1
+            verdict["winner_agent"] = runs[orig]["agent"]
+        scores = verdict.get("scores", [])
+        if len(scores) == len(order):
+            unshuffled = [0] * len(order)
+            for p, o in enumerate(order):
+                unshuffled[o] = scores[p]
+            verdict["scores"] = unshuffled
+        verdict["judge_model"] = judge_model
+        return verdict
     except Exception as e:
-        return {"winner": None, "scores": [], "motivo": f"juiz falhou: {e}"}
+        return {"winner": None, "scores": [], "motivo": f"juiz falhou: {e}",
+                "judge_model": judge_model}
 
 
 # --------------------------------------------------------------------------- #
@@ -212,8 +267,13 @@ def run_solo(agents: list[dict], role: str, task: str, record_stats: bool) -> li
 
 
 def run_parallel(agents: list[dict], task: str, record_stats: bool) -> list[dict]:
-    print(f"  modo PARALLEL -> {', '.join(a['nome'] for a in agents)} na mesma tarefa")
-    return [run_one(a, task, record_stats) for a in agents]
+    """Todos os agentes na mesma tarefa, em threads (chamadas sao I/O-bound).
+    Escritas no ledger sao serializadas pelo lock do ledger_io."""
+    from concurrent.futures import ThreadPoolExecutor
+    print(f"  modo PARALLEL -> {', '.join(a['nome'] for a in agents)} na mesma tarefa (simultaneo)")
+    with ThreadPoolExecutor(max_workers=len(agents)) as pool:
+        futures = [pool.submit(run_one, a, task, record_stats) for a in agents]
+        return [f.result() for f in futures]
 
 
 # --------------------------------------------------------------------------- #
@@ -233,14 +293,11 @@ def persist(role: str, mode: str, complexity: str, task: str,
         "verdict": verdict,
     }
     (d / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
-    # tambem no history.json (alimenta ADR-003)
-    hf = LEDGER_DIR / "history.json"
+    # tambem no historico central (alimenta ADR-003) -- via ledger_io, sob lock
     try:
-        data = json.loads(hf.read_text(encoding="utf-8"))
-        data.setdefault("logs", []).append(summary)
-        hf.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        append_history(summary)
     except Exception as e:
-        print(f"  [WARNING] history.json: {e}")
+        print(f"  [WARNING] historico: {e}")
     return d
 
 
@@ -265,7 +322,9 @@ def print_report(runs: list[dict], mode: str, verdict: dict | None) -> None:
                   f"mais barato que {exp['agent']}")
     if verdict:
         print("-" * 64)
-        print(f"  JUIZ -> vencedor: candidato {verdict.get('winner')} | scores={verdict.get('scores')}")
+        winner_label = verdict.get("winner_agent") or f"candidato {verdict.get('winner')}"
+        print(f"  JUIZ ({verdict.get('judge_model', '?')}) -> vencedor: {winner_label} "
+              f"| scores={verdict.get('scores')}")
         print(f"          motivo: {verdict.get('motivo','')[:200]}")
     print("=" * 64)
 

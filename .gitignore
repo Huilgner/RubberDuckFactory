@@ -28,11 +28,27 @@ temp_freelancer_workspace/
 
 # Logs e artefatos de build
 *.log
-project_ledger/hooks_audit.log
-# Ledger de governança é rastreado mesmo sendo .log
-!project_ledger/agent_ledger.log
 .DS_Store
 .vscode/
+
+# ── Propagação multiusuário: genoma no git, fenótipo local ─────────────────
+# Squad local (stats, pontos, evolution de CADA usuário) — nunca versionar.
+# O genoma compartilhável vive em agents/pool/ (versionado).
+agents/active/*
+!agents/active/.gitkeep
+agents/clearance_memory/*
+!agents/clearance_memory/.gitkeep
+
+# Ledger, histórico e resíduos de projetos (briefings, custos, duelos,
+# registro de arquivos) — dados sensíveis dos projetos de cada usuário.
+project_ledger/*
+!project_ledger/.gitkeep
+
+# Flag de code freeze (estado local do deploy committee)
+.code_freeze
+
+# Saídas geradas por agentes em runtime
+sites/
 
 # uv / pip
 .venv/

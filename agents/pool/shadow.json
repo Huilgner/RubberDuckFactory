@@ -4,13 +4,13 @@
   "specialty": "Backend & Security",
   "model": "google/gemini-2.5-pro",
   "ruleset_version": "SEC-909",
-  "evolution": "Stable",
-  "success_rate": 94.8,
   "status": "active",
+  "evolution": "Stable",
+  "success_rate": 100.0,
+  "tasks_completed": 0,
+  "tasks_failed": 0,
   "pontos": {
     "externos": 0,
     "internos": 0
-  },
-  "tasks_completed": 0,
-  "tasks_failed": 0
+  }
 }

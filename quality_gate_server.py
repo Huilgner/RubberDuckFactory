@@ -24,8 +24,15 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
+sys.path.insert(0, str(Path(__file__).parent))
+from ledger_io import append_history
+
 PROJECT_ROOT = Path(__file__).parent
 FREEZE_FLAG = PROJECT_ROOT / ".code_freeze"
+LAST_VERDICT = PROJECT_ROOT / "project_ledger" / "last_verdict.json"
+
+# ADR-004 fase 1: divida acumulada tambem bloqueia
+MAX_MEDIA_FINDINGS = 2  # >= 3 achados MEDIA em qualquer combinacao -> NO_GO
 
 mcp = FastMCP(
     name="RubberDuckFactory Quality Gate",
@@ -37,32 +44,74 @@ SEVERITY_RANK = {"OK": 0, "LEVE": 1, "MÉDIA": 2, "ALTA": 3, "CRÍTICA": 4}
 
 # ─── Code Freeze ─────────────────────────────────────────────────────────────
 
+def _read_last_verdict() -> dict:
+    if not LAST_VERDICT.exists():
+        return {}
+    try:
+        return json.loads(LAST_VERDICT.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 @mcp.tool()
-def deploy_freeze(action: str) -> dict:
+def deploy_freeze(action: str, reason: str = "") -> dict:
     """
-    Gerencia o estado de Code Freeze do repositório.
+    Gerencia o estado de Code Freeze do repositório (ADR-004 fase 1: o freeze
+    é ACOPLADO ao veredito — "unset" só funciona com um GO emitido DEPOIS do
+    freeze atual; destravar sem GO exige "override" com justificativa auditada).
 
     Args:
-        action: "set" para ativar freeze, "unset" para remover, "status" para consultar.
+        action: "set" ativa | "unset" remove (exige GO posterior ao set) |
+                "override" remove sem GO (exige reason, gera FREEZE_OVERRIDE
+                no ledger) | "status" consulta.
+        reason: justificativa obrigatória para "override".
 
     Returns:
-        dict com 'frozen' (bool), 'action' e 'since' (timestamp de ativação).
+        dict com 'frozen' (bool), 'action' e detalhes.
     """
     if action == "set":
         ts = datetime.now(timezone.utc).isoformat()
         FREEZE_FLAG.write_text(ts, encoding="utf-8")
         return {"frozen": True, "action": "set", "since": ts}
+
     elif action == "unset":
-        if FREEZE_FLAG.exists():
+        if not FREEZE_FLAG.exists():
+            return {"frozen": False, "action": "unset", "note": "freeze já estava inativo"}
+        frozen_since = FREEZE_FLAG.read_text(encoding="utf-8").strip()
+        verdict = _read_last_verdict()
+        if verdict.get("verdict") != "GO" or verdict.get("timestamp", "") <= frozen_since:
+            return {
+                "frozen": True,
+                "action": "unset",
+                "error": "Destravamento negado: nenhum veredito GO emitido apos o freeze atual. "
+                         "Rode o comitê (deploy_verdict) ou use action='override' com reason.",
+                "frozen_since": frozen_since,
+                "last_verdict": verdict or None,
+            }
+        FREEZE_FLAG.unlink()
+        return {"frozen": False, "action": "unset", "authorized_by_verdict": verdict.get("timestamp")}
+
+    elif action == "override":
+        if not reason.strip():
+            return {"error": "override exige 'reason' não-vazio — a justificativa é auditada no ledger."}
+        was_frozen = FREEZE_FLAG.exists()
+        if was_frozen:
             FREEZE_FLAG.unlink()
-        return {"frozen": False, "action": "unset"}
+        append_history({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": "FREEZE_OVERRIDE",
+            "reason": reason.strip()[:300],
+            "was_frozen": was_frozen,
+        })
+        return {"frozen": False, "action": "override", "audited": True, "reason": reason.strip()[:300]}
+
     elif action == "status":
         frozen = FREEZE_FLAG.exists()
         return {
             "frozen": frozen,
             "since": FREEZE_FLAG.read_text(encoding="utf-8").strip() if frozen else None,
         }
-    return {"error": f"action inválido: '{action}'. Use set, unset ou status."}
+    return {"error": f"action inválido: '{action}'. Use set, unset, override ou status."}
 
 
 # ─── API Health ───────────────────────────────────────────────────────────────
@@ -277,12 +326,16 @@ def quality_gate_log_scan(lines: int = 500) -> dict:
 # ─── Veredito ─────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def deploy_verdict(reports: list[dict]) -> dict:
+def deploy_verdict(reports: list[dict], project: str = "") -> dict:
     """
     Consolida relatórios dos especialistas e emite o veredito de deploy.
+    ADR-004 fase 1: ALTA/CRÍTICA bloqueia (como antes); dívida acumulada também —
+    3+ achados MÉDIA em qualquer combinação = NO_GO. O veredito é PERSISTIDO no
+    ledger (DEPLOY_VERDICT) e habilita o deploy_freeze(unset) quando GO.
 
     Args:
         reports: Lista de dicts com 'agent', 'scope' e 'severity' por especialista.
+        project: Nome do projeto sendo deployado (para o ledger).
 
     Returns:
         dict com 'verdict' (GO | NO_GO), 'blockers', 'summary' e 'auto_deploy_authorized'.
@@ -290,7 +343,10 @@ def deploy_verdict(reports: list[dict]) -> dict:
     BLOCK_THRESHOLD = SEVERITY_RANK["ALTA"]
 
     blockers = [r for r in reports if SEVERITY_RANK.get(r.get("severity", "OK"), 0) >= BLOCK_THRESHOLD]
-    verdict = "NO_GO" if blockers else "GO"
+    media_count = sum(1 for r in reports if r.get("severity") == "MÉDIA")
+    debt_block = media_count > MAX_MEDIA_FINDINGS
+
+    verdict = "NO_GO" if (blockers or debt_block) else "GO"
 
     lines = []
     for r in reports:
@@ -299,14 +355,40 @@ def deploy_verdict(reports: list[dict]) -> dict:
         scope = r.get("scope", "?")
         flag  = "BLOQUEIO" if SEVERITY_RANK.get(sev, 0) >= BLOCK_THRESHOLD else "APROVADO"
         lines.append(f"[{flag}] {agent} ({scope}): {sev}")
+    if debt_block:
+        lines.append(f"[BLOQUEIO] Dívida acumulada: {media_count} achados MÉDIA "
+                     f"(máximo tolerado: {MAX_MEDIA_FINDINGS})")
 
-    return {
+    ts = datetime.now(timezone.utc).isoformat()
+    result = {
         "verdict": verdict,
         "blockers": blockers,
+        "media_findings": media_count,
         "summary": "\n".join(lines),
         "auto_deploy_authorized": verdict == "GO",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": ts,
     }
+
+    # Persistência (ADR-004): veredito vira evento auditável + habilita o unset do freeze
+    try:
+        append_history({
+            "timestamp": ts,
+            "type": "DEPLOY_VERDICT",
+            "project": project or "n/a",
+            "verdict": verdict,
+            "media_findings": media_count,
+            "reports": [{"agent": r.get("agent", "?"), "scope": r.get("scope", "?"),
+                         "severity": r.get("severity", "?")} for r in reports],
+        })
+        LAST_VERDICT.parent.mkdir(parents=True, exist_ok=True)
+        LAST_VERDICT.write_text(
+            json.dumps({"verdict": verdict, "timestamp": ts, "project": project or "n/a"}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        result["ledger_warning"] = f"veredito emitido mas não persistido: {e}"
+
+    return result
 
 
 # ─── Entrypoint ───────────────────────────────────────────────────────────────
