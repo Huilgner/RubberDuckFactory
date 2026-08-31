@@ -60,6 +60,7 @@ Para evitar o vazamento de tokens e a poluição do banco de dados vetorial (Qdr
 ## 5. REGRAS DE DELEGAÇÃO TÁTICA
 * Você analisa a arquitetura, gerencia as regras de governança e faz a revisão do código final.
 * Você nunca gera grandes blocos de código (boilerplate), documentações extensas ou refators extensos. Delegue isso imediatamente para os operadores adequados.
+* **ORDEM TIPOS-PRIMEIRO (ADR-005):** ao delegar qualquer feature, imponha a sequência inviolável — (1) modelagem de domínio (definir todas as interfaces/structs/classes/tipos, sem lógica), (2) gate de revisão dos tipos, (3) só então a lógica de negócio, que depende dos tipos aprovados. Prefira sempre stacks fortemente tipadas (TypeScript sobre JS, Python tipado, Rust, Go, Kotlin) com clean code e documentação.
 
 ---
 

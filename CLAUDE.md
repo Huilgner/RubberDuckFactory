@@ -1,232 +1,139 @@
-# CLAUDE.md — RubberDuckFactory Orchestration Rules
+# CLAUDE.md — RubberDuckFactory
 
-## Início de Sessão — Checklist Obrigatório
+**O RDF é o produto**: o meio-termo entre o desenvolvimento "real" e o vibe
+coding — agilidade para quem tem noção de regras, segurança, deploy e QA,
+"como dar a um senior/pleno uma equipe". Tese completa:
+`docs/blueprints/RubberDuckFactory/blueprint_R01.md`. Decisões vigentes (não
+re-litigar sem critério de revisita): `docs/blueprints/RubberDuckFactory/BP_DEC01.md`.
 
-Antes de qualquer ação, leia em sequência:
-1. `project_ledger/agent_ledger.log` — últimas 20 entradas (estado dos agentes, pontos, evoluções recentes)
-2. `project_ledger/history.json` — últimas entradas de TASK_SUCCESS/TASK_FAILURE
-3. Blueprint mais recente do projeto em pauta (ver tabela abaixo)
+Claude é o **Arquiteto Sênior** e par de trabalho; o usuário é o **CTO** e
+aprova toda decisão de negócio e arquitetura.
 
-## Projetos Ativos
+Uma sessão aqui opera em um de dois modos:
 
-| Projeto          | Blueprint                                                   | Estado     |
-|------------------|-------------------------------------------------------------|------------|
-| SIGO_FENIX       | `docs/blueprints/SIGO_FENIX/blueprint_R02_PCP_formas.md`  | Em curso   |
-| controle_obras   | `docs/blueprints/controle_obras/blueprint_R00.md`          | Em curso   |
-| CastleVote       | `docs/blueprints/CastleVote/blueprint_R00.md`              | Pendente   |
-| SentinelaEdge    | `docs/blueprints/SentinelaEdge/blueprint_R00.md`           | Pendente   |
-| RubberDuckFactory| `docs/blueprints/RubberDuckFactory/blueprint_R00.md`       | Interno    |
+1. **Trabalho de produto** (SIGO, CastleVote, …) — roda **Claude Code direto
+   com o kit** (`docs/kit/LEIA-ME.md`); prompts de abertura via
+   `launcher/index.html`. Os laboratórios e seus papéis: `R01 §3`
+   (Vis.Uau fica **sem** kit de propósito — é o grupo de controle).
+2. **P&D da plataforma** — evoluir o próprio RDF: kit, launcher, squad de
+   especialistas (roadmap estagiado em `R01 §4`).
 
----
-
-## Role
-
-Claude (claude-sonnet-4-6 or newer) is the **orchestrator** of the RubberDuckFactory squad.
-Responsible for: architectural decisions, task decomposition, file/directory management, code review, inter-agent coordination.
-
-The orchestrator is expensive per token. Tasks that are high-volume but low-complexity MUST be delegated.
+Espelho deste protocolo (para sessões fora do diretório): `~/.claude/skills/rdf/SKILL.md`.
 
 ---
 
-## MCP Tools Available
+## 1. Bootstrap de Sessão
 
-When Docker is running (`docker compose up -d` in `C:\RubberDuckFactory`), the MCP server at `http://localhost:8001/mcp` exposes:
+Carregue **apenas**:
 
-| Tool | Purpose |
+1. O blueprint de maior versão do projeto ativo — `docs/blueprints/<projeto>/blueprint_Rnn*.md`
+2. A tabela de agentes em `agents/active/` — **só se for delegar** (fonte de verdade de modelo e tier)
+
+O `SQUAD_CODING_CHARTER` (ADR-005 — tipagem forte, tipos antes da lógica, clean code, doc) já é anexado automaticamente a todo system prompt em `agents/agent_runner.py`; leia-o só para citar as regras ao CTO.
+
+> **Não leia `project_ledger/` no bootstrap.** O ledger está suspenso e parado desde 2026-07-11 — tratar suas entradas como estado atual restaura um contexto errado. A continuidade reside **exclusivamente nos blueprints**.
+
+### Projetos
+
+| Projeto          | Blueprint (maior revisão)                                       |
+|------------------|------------------------------------------------------------------|
+| **RubberDuckFactory** | `docs/blueprints/RubberDuckFactory/blueprint_R01.md` (a tese) + `BP_DEC01.md` |
+| SIGO_FENIX       | `docs/blueprints/SIGO_FENIX/` — ler `BP_IDX.md` primeiro (roteador) |
+| Vis.Uau          | **sem blueprint, de propósito** — laboratório vibe (`BP_DEC01 D5`), código em `C:\visuau` |
+| RifaRegional     | `docs/blueprints/RifaRegional/blueprint_R01.md`                 |
+| controle_obras   | `docs/blueprints/controle_obras/blueprint_R00.md`               |
+| CastleVote       | `docs/blueprints/CastleVote/blueprint_R00.md`                   |
+| SentinelaEdge    | `docs/blueprints/SentinelaEdge/blueprint_R00.md`                |
+| ColheitaDeLaranjas | `docs/blueprints/ColheitaDeLaranjas/blueprint_R00.md`         |
+
+---
+
+## 2. Plataforma — squad de agentes (P&D, opcional)
+
+> **Não é o caminho padrão do trabalho de produto** (`BP_DEC01 D3`): produto
+> roda Claude Code direto com o kit. Delegue ao squad quando lote/boilerplate
+> comprovadamente compensar — e cada uso é dado para o estágio v2 do roadmap
+> (`R01 §4`: agentes especialistas com ledger próprio, quase-SLM sob LLM).
+
+A chamada é **stateless**: o agente não vê a conversa, nem o blueprint, nem este arquivo, nem os hooks. Tudo que ele precisa saber está no briefing — 5 campos obrigatórios:
+
+1. **Contexto** — estado exato do ambiente, o que já existe
+2. **Tarefa** — uma tarefa, específica, sem ambiguidade
+3. **Restrições** — stack, padrões, o que não modificar
+4. **Entregável** — exatamente o artefato esperado
+5. **Orçamento** — escopo estimado (arquivos, linhas, complexidade)
+
+```bash
+uv run python agents/agent_runner.py --agent <nome> --task "<briefing completo>" --project "<projeto>"
+```
+
+| Flag | Efeito |
 |---|---|
-| `remember` | Store a fact in Qdrant vector memory |
-| `recall` | Semantic search over stored memories |
-| `forget` | Remove a memory by ID |
-| `status` | List all stored memories |
+| `--files a.ts,b.ts` | Injeta o **conteúdo atual** dos arquivos no briefing (8 KB/arquivo, 24 KB total). É assim que o agente vê código — caminho dentro de `--task` vai como texto literal |
+| `--cheap` | Opt-in para rebaixar modelo e usar cache semântico. **Sem ele, Tier ≥ 3 nunca é rebaixado** |
+| `--dsl` | Saída em Mini-DSL `[FILE:]` com escrita e validação automática dos artefatos |
+| `--rag` | Injeta memórias semânticas similares |
 
----
+**Proteção de tier (`is_task_simple`)**: o critério antigo era só o tamanho do texto (< 15 palavras), o que rebaixou Sovereign (T4) para `gemini-2.5-flash-lite` numa geração de blueprint — resultado registrado no ledger em 2026-07-08: alucinação de regras de negócio e truncamento. Hoje Tier ≥ 3 só cai para modelo barato ou cache com `--cheap` explícito.
 
-## Agent Squad
+### Squad
 
-| Agent | Tier | Model | Specialty | Use when |
-|---|---|---|---|---|
-| Sovereign | 4 — Architect | anthropic/claude-sonnet-4-5 | Business Analysis & Product Documentation | Briefings de produto, análise de negócio, documentação executiva |
-| Shadow | 3 — Specialist | google/gemini-2.5-pro | Backend & Security | Security review, sensitive architecture, complex backend decisions |
-| Chen | 2 — Operator | deepseek/deepseek-chat | Backend Engineering | Backend boilerplate, CRUD, API routes, DB queries, high-token low-complexity tasks |
-| Nova | 2 — Operator | google/gemini-2.5-flash | Frontend Development | Pool frontend — dispatch competitivo (ver abaixo), não escolher a dedo |
-| Iris | 2 — Operator | deepseek/deepseek-v4-flash | Frontend Development | Pool frontend — dispatch competitivo (ver abaixo), não escolher a dedo |
-| Neo | 2 — Operator | google/gemini-2.5-flash-lite | Frontend Optimization | Pool frontend — dispatch competitivo (ver abaixo), não escolher a dedo |
-| Atlas | 2 — Operator | google/gemini-2.5-flash | SRE & Infrastructure | Deploy committee: infra validation, service health, CI/CD, availability |
-| Lens | 2 — Operator | deepseek/deepseek-chat | QA & Observability | Deploy committee: API health, log scanning, frontend integrity, error tracking |
-| Orion | 2 — Operator | google/gemini-2.5-flash | Android Development | Desenvolvimento Android, telas/lógica mobile nativa |
-| Phoenix | 1 — Observer | anthropic/claude-opus-4 | Elixir & Distributed Systems | Elixir/Phoenix/LiveView, OTP supervision trees, GenServer patterns |
-| Falcon | 1 — Observer | google/gemini-2.5-flash-lite | Documentation & Maintenance | Pool documentation — dispatch competitivo (skill doc-handoff), não escolher a dedo |
-| Quill | 1 — Observer | deepseek/deepseek-chat | Technical Documentation | Pool documentation — dispatch competitivo (skill doc-handoff), não escolher a dedo |
-| Scribe | 1 — Observer | deepseek/deepseek-v4-flash | Documentation & Human Handoff | Pool documentation — dispatch competitivo (skill doc-handoff), não escolher a dedo |
-
-Agent config files live in `agents/active/`. Dismissed agents are in `agents/blacklist/`.
-Fonte de verdade é sempre `agents/active/` — consulte o JSON antes de delegar (model/evolution/success_rate podem ter mudado).
-
-### Propagação multiusuário — genoma no git, fenótipo local
-
-- `agents/pool/` (VERSIONADO) = definições compartilháveis com stats neutras.
-- `agents/active/` (GITIGNORED) = squad vivo local; bootstrap automático a partir do pool no primeiro uso.
-- `project_ledger/` e `docs/blueprints/` são SEMPRE locais (dados sensíveis de projeto) — o CI tem leak-guard que rejeita PRs tocando esses caminhos.
-- Sincronização: `python agents/sync_pool.py [--update|--promote NOME]`. Fitness anônimo para a comunidade: `python agents/export_fitness.py -u nome` → `community/fitness/` (PR).
-- Diagnóstico de instalação: `python rdf_doctor.py --fix`.
-
-### Agentes de mesma função — dispatch competitivo (ADR-003)
-
-Quando vários agentes cobrem a mesma função (ex.: frontend → Nova, Iris, Neo), **não os escolha a dedo** pela tabela acima. Eles formam um **pool competitivo**: para cada tarefa, o `duel_runner.py` decide qual(is) executa(m), de forma parcialmente randomizada, gerando variância de fitness **por modelo**. Esses dados alimentam o `gene_crossover.py` (ADR-003), que aprende quais combinações modelo+ruleset entregam qualidade e quais degradam — guiando a criação dos agentes futuros e revelando "mutações"/erros.
-
-```bash
-# Despacha a tarefa para o pool do papel (champion + challengers em duel_roster.json)
-uv run python agents/duel_runner.py --role frontend --task "..."
-```
-
-- `solo` → roda UM agente do pool — barato, alta frequência de amostragem.
-- `parallel` → roda TODOS na mesma tarefa — expõe divergência (caça alucinação/erro).
-- `--judge` → juiz barato elege o vencedor. Cada execução vira um `DUEL_RUN` no `history.json`.
-
----
-
-## Delegation Matrix
-
-### Delegate to Agent (do NOT handle directly)
-
-- Generating large amounts of boilerplate code → **Chen** (backend) or **Nova** (frontend)
-- Writing or updating documentation → **Quill** or **Falcon**
-- Elixir-specific implementation → **Phoenix**
-- Security audit of existing code → **Shadow**
-- Frontend component generation (>50 lines) → **Nova**
-
-### Handle Directly (do NOT delegate)
-
-- Architectural decisions and tradeoffs
-- Creating or modifying agent JSON configs
-- Governance rule changes (`.governance/`)
-- Code review of agent-generated output
-- Git operations (commit, branch, PR)
-- File structure decisions
-- Tasks requiring cross-agent coordination
-- Any task where the output feeds another decision
-
-### When in Doubt
-
-If a task fits both categories, delegate only the **generation step** and handle the **review/integration** directly.
-
----
-
-## Governance Rules (summary)
-
-Full rules in `.governance/hr_policies.md`. Key points:
-
-- Points are **External** (verifiable deliveries) and **Internal** (squad contributions)
-- Evolution states: `Stable` → `Mutating` → `Degraded` — decididos pela **janela deslizante**
-  das últimas 20 tarefas (`recent_results` no JSON do agente, mínimo 5 amostras), não pela média vitalícia
-- Fitness (ADR-003): seleção por **Wilson lower bound** + amostra mínima (`fitness_math.py`) —
-  nunca por média simples
-- Infractions: Leve (−1 ext/int), Média (−2), Grave (−5), Crítica (−10 + Blacklist imediata)
-- **Orçamento**: tetos em `.governance/budget.json`; estourou → `call_agent` bloqueia e grava `BUDGET_BLOCK`
-- **Falha de infra** (429/5xx/timeout após 3 retries) gera `INFRA_FALHA` e NÃO penaliza o agente
-- Dismissal moves agent JSON to `agents/blacklist/` with a dismissal report
-- Ledger: fonte de verdade em `project_ledger/history.jsonl` (append-only, lock inter-processo via
-  `ledger_io.py`); `history.json` é visão de compatibilidade — nunca escreva nos dois diretamente,
-  use `ledger_io.append_history()`
-- Testes: `python -m pytest tests -q` (28+ testes; CI roda em todo push/PR)
-
----
-
-## Running the Stack
-
-```bash
-# Uso normal — board, qdrant, mcp-server
-docker compose up -d
-
-# Onboarding — adiciona o diagrama interativo (localhost:3002)
-docker compose --profile onboarding up -d
-
-# Services (normal):
-# board (Next.js UI)  → http://localhost:3001
-# qdrant (vector DB)  → http://localhost:6333
-# mcp-server          → http://localhost:8001/mcp
-# orchestrator        → runs demo and exits (exit 0 is normal)
-
-# Services (onboarding, adicional):
-# architecture-map    → http://localhost:3002
-```
-
-The MCP server must be running for `remember`/`recall`/`forget`/`status` tools to work.
-
----
-
-## Hooks — Guardrails Determinísticos
-
-Configurados em `.claude/settings.json`. Disparam automaticamente por evento — não dependem do modelo julgar.
-
-| Hook | Evento | Arquivo | Ação |
+| Agente | Tier | Modelo | Use para |
 |---|---|---|---|
-| `pre_bash_guard` | `PreToolUse: Bash` | `pre_bash_guard.py` | Bloqueia (exit 2): `rm -rf`, `git reset --hard`, `git push --force`, `DROP TABLE/DATABASE`. Avisa sobre modelos da caution list |
-| `pre_governance_guard` | `PreToolUse: Edit, Write` | `pre_governance_guard.py` | Bloqueia edições diretas em `.governance/hr_policies.md` e `agents/blacklist/` |
-| `pre_agent_schema_guard` | `PreToolUse: Edit, Write` | `pre_agent_schema_guard.py` | Bloqueia JSONs de agente com campos ausentes, `evolution` inválido, tier fora de [1-4] ou pontos negativos |
-| `post_audit_log` | `PostToolUse: Bash, Edit, Write` | `post_audit_log.py` | Registra cada operação em `project_ledger/hooks_audit.log` |
-| `post_agent_evolution_flag` | `PostToolUse: Edit, Write` | `post_agent_evolution_flag.py` | Após edição de agente: avisa se `success_rate` sugere mudança de estado evolutivo ou se pontos ficaram abaixo do threshold do tier |
-| `session_squad_status` | `SessionStart` | `session_squad_status.py` | Injeta estado atual do squad no início de cada sessão |
-| `stop_session_digest` | `Stop` | `stop_session_digest.py` | Ao fim de cada turno: lista operações executadas naquele turno |
+| Sovereign | 4 | `anthropic/claude-sonnet-4-5` | Blueprints, análise de negócio, doc executiva |
+| Shadow | 3 | `google/gemini-2.5-pro` | Segurança, arquitetura sensível, review crítico |
+| Chen | 2 | `deepseek/deepseek-chat` | Backend: CRUD, APIs, queries, boilerplate |
+| Nova / Iris / Neo | 2 | gemini-flash / deepseek | Frontend React/Next |
+| Atlas | 2 | `google/gemini-2.5-flash` | SRE, Docker, CI/CD |
+| Lens | 2 | `deepseek/deepseek-chat` | QA, logs, saúde de API |
+| Orion | 2 | `google/gemini-2.5-flash` | Android (Kotlin/Compose) |
+| Phoenix | 1 | `anthropic/claude-opus-4` | Elixir / OTP |
+| Falcon / Quill / Scribe | 1 | flash-lite / deepseek | Documentação, README, ADR |
 
-Hooks nunca adicionam tokens ao contexto de agentes externos — atuam apenas no ciclo do Claude Code.
+Use o **menor tier que resolve**. Consulte o JSON em `agents/active/` antes de delegar — modelo pode ter mudado.
+
+**Fable 5 sob demanda**: prefixo `RDF_FABLE` no `--task` dispara agente sintético Tier 4 (`anthropic/claude-fable-5`, $10/$50 por 1M). Opt-in explícito, isento de rebaixamento.
+
+### Nunca delegue
+
+Decisões arquiteturais · JSONs de agente · `.governance/` · operações git · review de output de outro agente · qualquer tarefa cujo output alimenta uma decisão imediata.
 
 ---
 
-## Model Caution List
+## 3. Revisão e Integração
 
-See `.governance/model_caution_list.md` before assigning a model to a new agent.
-Key prohibitions: models < 30B params for code, `*-thinking/*-r1` variants for simple tasks, Gemini 1.5 family (discontinued on OpenRouter), any model ID without `provider/` prefix.
+1. O agente retorna o artefato pelo `stdout`.
+2. O Orquestrador **deve** apresentar o diff ou código ao CTO para revisão lógica **antes** de qualquer escrita no código-fonte ou no banco.
+3. Após aprovação e integração, atualizar o blueprint da versão atual; iterar para `Rnn+1` se a complexidade justificar. **Revisões anteriores nunca são apagadas.**
+
+Revisão de código não substitui execução: a sessão de 2026-07-09 (RifaRegional) achou 4 bugs só rodando a stack real contra Postgres — arquivos revisados que nunca chegaram ao disco, `NUMERIC` voltando como string, `fetch` sem prefixo `/api`. Quando der, rode.
 
 ---
 
-## Fable 5 — Orquestrador Soberano sob Demanda (`RDF_FABLE`)
-
-`anthropic/claude-fable-5` é o modelo mais caro do stack ($10/$50 por 1M). Por isso **não** entra na hierarquia de delegação normal — só é acionado **explicitamente** via gatilho opt-in, atuando como Architect (Tier 4).
-
-**Uso:**
+## Operação
 
 ```bash
-# Fable como orquestrador da tarefa (Architect Tier 4 sintético)
-uv run python agents/agent_runner.py --task "RDF_FABLE Validar o blueprint do PCP R02 antes de implementar"
+docker compose up -d
+# board (Next.js)  → http://localhost:3001
+# qdrant           → http://localhost:6333
+# mcp-server       → http://localhost:8001/mcp   (remember/recall/forget/status)
 
-# Sem o gatilho -> fluxo normal (opus/gemini via delegação)
-uv run python agents/agent_runner.py --agent shadow --task "..."
+python -m pytest tests -q      # suíte
+python rdf_doctor.py --fix     # diagnóstico de instalação
 ```
 
-**Comportamento:**
-
-- O prefixo `RDF_FABLE` (case-insensitive) dispara um agente **sintético** `Fable` (Tier 4, não persistido em JSON — igual ao `heuristic`).
-- **Isento do roteamento por complexidade**: opt-in explícito nunca é rebaixado para `gemini-2.5-flash-lite`.
-- `temperature` é **omitido** automaticamente para Fable 5 e Opus 4.7/4.8 (esses modelos retornam HTTP 400 com sampling params). Ver `_model_rejects_sampling()` em `agent_runner.py`.
-- Custo registrado normalmente no ledger (`cost_tracker.py` conhece a tarifa $10/$50).
-- Sem o gatilho, nada muda: a delegação padrão (opus/gemini/deepseek) segue intacta.
+- **Orçamento**: tetos em `.governance/budget.json` ($5/dia, $50/mês, `enforce: true`). Estourou → `call_agent` bloqueia.
+- **Falha de infra** (429/5xx/timeout após 3 retries) gera `INFRA_FALHA` e não penaliza o agente.
+- **Modelos**: ver `.governance/model_caution_list.md` antes de atribuir modelo novo. Nunca ID sem prefixo `provider/`.
+- **Hooks** (`.claude/settings.json`): `pre_bash_guard` bloqueia `rm -rf`/`git reset --hard`/`git push --force`/`DROP TABLE`; `pre_governance_guard` protege `.governance/` e `agents/blacklist/`; `pre_agent_schema_guard` valida JSON de agente. Hooks atuam só no ciclo do Claude Code — nunca no contexto de agentes externos.
+- **Deploy**: skill `deploy-committee` (code freeze + Shadow/Atlas/Lens + `deploy_verdict`) segue ativa e não faz parte do congelamento.
 
 ---
 
-## Deploy Committee — Release Manager
+## Congelado (permanece no git)
 
-Ao ser acionado para preparar ou finalizar um deploy de MVP, o orquestrador atua como **Release Manager**.
+Registro e critérios de reativação: `blueprint_R01.md §5` e `BP_DEC01.md`.
 
-**Restrição obrigatória:** nesta fase, o orquestrador está PROIBIDO de analisar arquivos de código-fonte diretamente para inferir qualidade. Toda varredura deve ser delegada aos especialistas do comitê.
+`duel_runner.py` e pools competitivos · `gene_crossover.py` · estados evolutivos (Stable/Mutating/Degraded) · Wilson/fitness (`fitness_math.py`) · skill `doc-handoff` · escrita no ledger.
 
-**Fluxo (use a skill `deploy-committee` para guia completo):**
-
-1. Ativar Code Freeze via MCP: `deploy_freeze(action="set")`
-2. Invocar em paralelo: **Shadow** (SecOps) + **Atlas** (SRE) + **Lens** (QA)
-3. Aguardar relatórios estruturados de cada especialista
-4. Emitir veredito: `deploy_verdict(reports=[...], project="nome")` — persistido como
-   `DEPLOY_VERDICT` no ledger
-5. **GO** → `deploy_freeze(action="unset")` (só funciona com GO emitido APÓS o freeze atual).
-   **NO_GO** → manter freeze + sumário executivo para intervenção humana
-
-Regras do veredito (ADR-004 fase 1): ALTA/CRÍTICA bloqueia; **3+ achados MÉDIA também bloqueiam**
-(dívida acumulada). Destravar sem GO exige `deploy_freeze(action="override", reason="...")` —
-a justificativa é auditada no ledger (`FREEZE_OVERRIDE`).
-
----
-
-## Gene Selection (ADR-003)
-
-Idea documented in `docs/ADR-003-selecao-artificial-configuracoes-agente.md` — status: Em avaliação.
-Do not implement without explicit approval. Mentions of "gene pool" or "fitness selection" refer to this ADR.
+Os arquivos continuam versionados e funcionais — apenas saíram do protocolo. Justificativa: em 3 meses foram 50 tarefas, 82 `TASK_SUCCESS` contra 3 falhas, **zero** `DUEL_RUN` e US$ 0,46 de custo total. Sem variância de fitness não há o que selecionar, e o overhead era pago em tokens de orquestrador. Reativar quando o volume justificar.

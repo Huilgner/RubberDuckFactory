@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RDF Launcher</title>
+<style>
+  :root {
+    --bg: #f6f7f5; --card: #ffffff; --ink: #1c2420; --muted: #5c6a62;
+    --line: #dde3de; --accent: #1a7f37; --accent-ink: #ffffff;
+    --chip: #eef2ee; --pre-bg: #101613; --pre-ink: #d7e2da;
+    --warn: #8a6d1f; --warn-bg: #fdf6e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101613; --card: #18201b; --ink: #e6ece8; --muted: #93a29a;
+      --line: #2a352e; --accent: #37c26b; --accent-ink: #0b130e;
+      --chip: #212b25; --pre-bg: #0b0f0d; --pre-ink: #cfdad3;
+      --warn: #d9b64a; --warn-bg: #241f10;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 28px 20px 60px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header h1 .v { color: var(--accent); }
+  header p { margin: 6px 0 0; color: var(--muted); }
+  header code { font-size: 12.5px; }
+  section { margin-top: 26px; }
+  .label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .prod {
+    background: var(--card); border: 1.5px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; cursor: pointer; text-align: left; color: var(--ink); font: inherit;
+  }
+  .prod:hover { border-color: var(--accent); }
+  .prod.sel { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent) inset; }
+  .prod .nm { font-weight: 600; }
+  .prod .tag { float: right; font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--chip); color: var(--muted); }
+  .prod .ds { display: block; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .act {
+    border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
+    border-radius: 99px; padding: 7px 16px; cursor: pointer; font: inherit; font-size: 14px;
+  }
+  .act:hover { border-color: var(--accent); }
+  .act.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .act:disabled { opacity: .45; cursor: not-allowed; }
+  textarea {
+    width: 100%; min-height: 92px; resize: vertical; background: var(--card); color: var(--ink);
+    border: 1.5px solid var(--line); border-radius: 10px; padding: 12px; font: inherit;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+  .hint b { color: var(--ink); }
+  .note { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 10px; }
+  .out { position: relative; margin-top: 10px; }
+  pre {
+    background: var(--pre-bg); color: var(--pre-ink); border-radius: 10px;
+    padding: 16px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;
+    font: 13px/1.55 Consolas, "Cascadia Mono", monospace; min-height: 60px; margin: 0;
+  }
+  .copy {
+    position: absolute; top: 10px; right: 10px; border: 0; border-radius: 8px;
+    background: var(--accent); color: var(--accent-ink); font: 600 13px/1 inherit;
+    padding: 9px 14px; cursor: pointer;
+  }
+  .copy:active { transform: translateY(1px); }
+  footer { margin-top: 34px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🦆 RDF Launcher <span class="v">v0</span></h1>
+    <p>Monta o prompt com a política do kit (aponte, não cole; carga dosada por ação). <b>Zero token até você colar.</b><br>
+    Tese e decisões: <code>docs\blueprints\RubberDuckFactory\blueprint_R01.md</code> · <code>BP_DEC01.md</code></p>
+  </header>
+
+  <section>
+    <div class="label">1 · Produto</div>
+    <div class="grid" id="prods"></div>
+  </section>
+
+  <section>
+    <div class="label">2 · Ação</div>
+    <div class="acts" id="acts"></div>
+  </section>
+
+  <section>
+    <div class="label">3 · Descreva (o bug, a feature, o foco…)</div>
+    <textarea id="desc" placeholder="Ex.: ao abrir o dashboard da cidade X, o mapa setorial vem vazio…"></textarea>
+    <div id="note"></div>
+  </section>
+
+  <section>
+    <div class="label">4 · Prompt</div>
+    <p class="hint" id="where"></p>
+    <div class="out">
+      <button class="copy" id="copy">Copiar</button>
+      <pre id="prompt">Escolha um produto e uma ação.</pre>
+    </div>
+  </section>
+
+  <footer>
+    v0 do roadmap (R01 §4). Critério para o v1 (disparar a CLI direto): usar isto em ≥ 5 sessões reais sem editar o prompt na mão.
+    Para editar a lista de produtos, abra este arquivo e mexa no bloco <code>PRODUTOS</code> no topo do script.
+  </footer>
+</div>
+
+<script>
+// ============================================================================
+// PRODUTOS — edite aqui. Campos:
+//   nome, caminho, papel: 'rigor'|'vibe'|'bancada'|'dormente',
+//   desc (linha do card), leitura (o que o prompt manda ler — aponte, não cole),
+//   retomar (caminho do RETOMAR.md, se existir), deployRef (tag/ref do último
+//   deploy, p/ o template de Debug), deployDoc (prompt/doc oficial de deploy),
+//   testes (comando da suíte), extra (particularidades em 1 linha)
+// ============================================================================
+const PRODUTOS = [
+  {
+    id: 'sigo', nome: 'SIGO_FENIX', papel: 'rigor',
+    caminho: 'C:\\SIGO_FENIX',
+    desc: 'Gestão de pré-moldados — laboratório de rigor',
+    leitura: 'C:\\RubberDuckFactory\\docs\\blueprints\\SIGO_FENIX\\BP_IDX.md (é um roteador: abra só a seção que ele apontar)',
+    retomar: 'C:\\SIGO_FENIX\\RETOMAR.md',
+    deployRef: 'alpha-1',
+    deployDoc: 'C:\\SIGO_FENIX\\RETOMAR_INFRA.md',
+    testes: 'cd frontend && pnpm vitest run',
+    extra: 'porta 3026 · MySQL no Docker (sigo-mysql, :3307) · banco de dev compartilhado'
+  },
+  {
+    id: 'castlevote', nome: 'CastleVote', papel: 'bancada',
+    caminho: 'C:\\CastleVote',
+    desc: 'Dashboards eleitorais — bancada de teste do RDF',
+    leitura: 'C:\\RubberDuckFactory\\docs\\blueprints\\CastleVote\\blueprint_R00.md (só as seções do tema)',
+    retomar: 'C:\\CastleVote\\RETOMAR.md',
+    deployRef: null,
+    deployDoc: null,
+    testes: null,
+    extra: 'pipeline Python · credenciais GCP são efêmeras (RN-011): pedir a cada sessão'
+  },
+  {
+    id: 'visuau', nome: 'Vis.Uau', papel: 'vibe',
+    caminho: 'C:\\visuau',
+    desc: 'Modo vibe — grupo de controle, sem kit (BP_DEC01 D5)',
+    leitura: null, retomar: null, deployRef: null, deployDoc: null, testes: null,
+    extra: 'vibecoded (Opus 5), você atua como PO · porta 3021'
+  },
+  {
+    id: 'controle_obras', nome: 'controle_obras', papel: 'dormente',
+    caminho: 'C:\\controle_obras',  // ⚠ confirme o caminho antes da 1ª sessão
+    desc: 'App Android offline-first — dormente',
+    leitura: 'C:\\RubberDuckFactory\\docs\\blueprints\\controle_obras\\blueprint_R00.md',
+    retomar: null, deployRef: null, deployDoc: null, testes: null,
+    extra: 'Kotlin/Compose/Room · kit entra quando o projeto for tocado'
+  },
+  {
+    id: 'sentinelaedge', nome: 'SentinelaEdge', papel: 'dormente',
+    caminho: 'C:\\SentinelaEdge',  // ⚠ confirme o caminho antes da 1ª sessão
+    desc: 'Landing institucional — dormente',
+    leitura: 'C:\\RubberDuckFactory\\docs\\blueprints\\SentinelaEdge\\blueprint_R00.md',
+    retomar: null, deployRef: null, deployDoc: null, testes: null,
+    extra: 'kit entra quando o projeto for tocado'
+  },
+];
+
+const ACOES = ['Retomar', 'Debug', 'Feature', 'Refatorar', 'Deploy'];
+const PAPEL_TAG = { rigor: 'laboratório de rigor', vibe: 'laboratório vibe', bancada: 'bancada', dormente: 'dormente' };
+
+let prod = null, acao = null;
+
+// ---------------------------------------------------------------------------
+// Templates — a carga de contexto é dosada por ação (R01 §1).
+// ---------------------------------------------------------------------------
+function descOu(ph) {
+  const d = document.getElementById('desc').value.trim();
+  return d || '<' + ph + '>';
+}
+
+function blocoLeitura(p) {
+  return p.leitura ? `**Leia antes de mexer** (aponte, não cole — abra só a seção do tema):\n${p.leitura}\n` : '';
+}
+
+function tplVibe(p, a) {
+  const cab = `Estou no **${p.nome}** (\`${p.caminho}\`), app 100% vibecoded — eu faço o papel de PO. Sem blueprints, sem protocolo: o código é a fonte da verdade.\n`;
+  let corpo = '';
+  if (a === 'Retomar')   corpo = `\nMe dê um resumo curto do estado (git log recente, estrutura) e o que parece ser o próximo passo.\nFoco: ${descOu('opcional')}\n`;
+  if (a === 'Debug')     corpo = `\n**O bug:** ${descOu('descreva o bug')}\n\nVeja o recente com \`git log --oneline -15\`, **reproduza antes de explicar**, e corrija.\n`;
+  if (a === 'Feature')   corpo = `\n**Quero:** ${descOu('descreva a feature')}\n\nFaça do jeito mais direto que funcione bem.\n`;
+  if (a === 'Refatorar') corpo = `\n**Refatorar:** ${descOu('o quê e por quê')}\n\nComportamento não muda; me mostre o diff antes de aplicar em massa.\n`;
+  if (a === 'Deploy')    corpo = `\n**Deploy:** ${descOu('para onde / o quê')}\n\nÁrvore limpa e commit nomeado antes de qualquer coisa; nada irreversível sem me confirmar.\n`;
+  const colheita = `\nNo final, me responda em UMA linha: o que fez falta nesta sessão por não existir documentação/lastro? (colheita para o RDF — eu registro no R01 §7.)`;
+  return cab + corpo + colheita;
+}
+
+function tplDormente(p) {
+  return `Quero retomar o **${p.nome}**, que está dormente.\n\n` +
+    `Leia o blueprint em:\n${p.leitura}\n\n` +
+    `Me apresente um resumo de 3–5 linhas do estado e das pendências. ` +
+    `Se formos trabalhar de verdade nele, o primeiro passo é aplicar o kit ` +
+    `(\`C:\\RubberDuckFactory\\docs\\kit\\LEIA-ME.md\`) — inclua isso no plano.\n\n` +
+    `Foco: ${descOu('opcional')}`;
+}
+
+function tplGovernado(p, a) {
+  const testes = p.testes ? `Suíte: \`${p.testes}\`.\n` : '';
+
+  if (a === 'Retomar') {
+    if (p.retomar)
+      return `Estou retomando o **${p.nome}**. Leia \`${p.retomar}\` e siga o que ele aponta — inclusive verificar o bloco de Estado antes de confiar nele.\n\nFoco desta sessão: ${descOu('opcional — sem foco, siga o "Próximo passo" do RETOMAR')}`;
+    return tplDormente(p);
+  }
+
+  if (a === 'Debug') {
+    const gitRef = p.deployRef
+      ? `2. Veja o que mudou desde o último deploy: \`git log --oneline ${p.deployRef}..HEAD\` e \`git diff ${p.deployRef} --stat\` (última tag conhecida: \`${p.deployRef}\` — confirme com \`git tag --sort=-creatordate\`).`
+      : `2. Veja o recente: \`git log --oneline -15\` e o \`git status\`.`;
+    return `Estou no **${p.nome}**. Tenho um bug para investigar.\n\n` +
+      `**O bug:** ${descOu('descreva o bug: onde aparece, o que esperava, o que aconteceu')}\n\n` +
+      `Antes de tocar em código:\n` +
+      `1. ${blocoLeitura(p).replace(/\n$/, '').replace('**Leia antes de mexer** ', 'Leia ')}\n` +
+      `${gitRef}\n` +
+      `3. **Reproduza o bug antes de explicá-lo.**\n\n` +
+      `Diagnóstico primeiro (causa raiz + evidência), correção depois. Se a investigação revelar que a regra de negócio está errada, a sessão corrige a regra — o fluxo é por tarefa.\n${testes}`;
+  }
+
+  if (a === 'Feature') {
+    return `Estou no **${p.nome}**. Quero implementar:\n\n` +
+      `**A feature:** ${descOu('descreva a feature e o resultado esperado')}\n\n` +
+      blocoLeitura(p) +
+      `Inclua na leitura a seção de pendências/ideias do tema: isso pode já ter registro, decisão — ou um "não fazer" (fora de escopo decidido não se reabre sem me perguntar).\n\n` +
+      `Me apresente em poucas linhas o que já existe que ela toca e o plano; implemente após meu OK, com testes.\n${testes}`;
+  }
+
+  if (a === 'Refatorar') {
+    return `Estou no **${p.nome}**. Refatoração:\n\n` +
+      `**O alvo:** ${descOu('o que refatorar e por quê')}\n\n` +
+      blocoLeitura(p) +
+      `Comportamento não muda. Leia a seção da blueprint do trecho antes — o que parece "sujeira" pode ser regra deliberada. Suíte verde antes e depois; me mostre o diff antes de aplicar em massa.\n${testes}`;
+  }
+
+  if (a === 'Deploy') {
+    if (p.deployDoc)
+      return `Quero tratar de **deploy/infra do ${p.nome}**. Não use o prompt de produto: leia \`${p.deployDoc}\` e siga-o.\n\nFoco: ${descOu('opcional')}`;
+    return `Quero fazer **deploy do ${p.nome}**.\n\n**O que sobe:** ${descOu('o que e para onde')}\n\n` +
+      blocoLeitura(p) +
+      `Regras: árvore limpa; deploy sai de commit ou tag **nomeado**, nunca de "o que estiver no disco"; nada irreversível sem me confirmar o passo antes.\n`;
+  }
+}
+
+function gerar() {
+  const out = document.getElementById('prompt');
+  const where = document.getElementById('where');
+  const note = document.getElementById('note');
+  note.innerHTML = '';
+  if (!prod || !acao) {
+    out.textContent = 'Escolha um produto e uma ação.';
+    where.innerHTML = '';
+    return;
+  }
+  where.innerHTML = `Abra o Claude Code em <b>${prod.caminho}</b> e cole o prompt. ` +
+    (prod.papel !== 'vibe' ? 'O CLAUDE.md do projeto carrega as regras sozinho.' : 'Sem CLAUDE.md lá — é o modo vibe, e é assim mesmo.');
+  if (prod.papel === 'dormente')
+    note.innerHTML = `<div class="note">Projeto dormente: confirme o caminho da pasta antes da primeira sessão (edite o bloco PRODUTOS deste arquivo se estiver errado).</div>`;
+  let txt;
+  if (prod.papel === 'vibe') txt = tplVibe(prod, acao);
+  else if (prod.papel === 'dormente') txt = tplDormente(prod);
+  else txt = tplGovernado(prod, acao);
+  out.textContent = txt.trim() + '\n';
+}
+
+// ---------------------------------------------------------------------------
+// UI
+// ---------------------------------------------------------------------------
+const elP = document.getElementById('prods');
+PRODUTOS.forEach(p => {
+  const b = document.createElement('button');
+  b.className = 'prod';
+  b.innerHTML = `<span class="tag">${PAPEL_TAG[p.papel]}</span><span class="nm">${p.nome}</span>` +
+    `<span class="ds">${p.desc}</span><span class="ds">${p.extra}</span>`;
+  b.onclick = () => {
+    prod = p;
+    [...elP.children].forEach(c => c.classList.remove('sel'));
+    b.classList.add('sel');
+    gerar();
+  };
+  elP.appendChild(b);
+});
+
+const elA = document.getElementById('acts');
+ACOES.forEach(a => {
+  const b = document.createElement('button');
+  b.className = 'act';
+  b.textContent = a;
+  b.onclick = () => {
+    acao = a;
+    [...elA.children].forEach(c => c.classList.remove('sel'));
+    b.classList.add('sel');
+    gerar();
+  };
+  elA.appendChild(b);
+});
+
+document.getElementById('desc').addEventListener('input', gerar);
+
+document.getElementById('copy').onclick = async () => {
+  const txt = document.getElementById('prompt').textContent;
+  const btn = document.getElementById('copy');
+  try {
+    await navigator.clipboard.writeText(txt);
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  btn.textContent = 'Copiado ✓';
+  setTimeout(() => btn.textContent = 'Copiar', 1600);
+};
+</script>
+</body>
+</html>

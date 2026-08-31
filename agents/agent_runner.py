@@ -137,13 +137,38 @@ def load_all_agents() -> list[dict]:
 # System prompt
 # ---------------------------------------------------------------------------
 
+# Carta de engenharia comum a TODO o squad (ADR-005). Anexada a qualquer
+# system prompt -- override ou gerado -- para que a preferencia por tipagem
+# forte, clean code e documentacao seja politica de squad, sem duplicar a
+# regra em cada persona. Fraseada de forma condicional ("ao produzir codigo")
+# para ser inofensiva aos agentes de documentacao.
+SQUAD_CODING_CHARTER = (
+    "\n\n## CARTA DE ENGENHARIA DO SQUAD (obrigatoria ao produzir codigo)\n"
+    "- TIPAGEM FORTE: prefira linguagens fortemente/estaticamente tipadas e o "
+    "modo mais tipado de cada stack -- TypeScript (nunca JS puro), Python com "
+    "type hints + checagem estatica, Rust, Go, Kotlin, Java, C#, Elixir com "
+    "@spec/@type. Se a stack for dinamica por imposicao, adicione a camada de "
+    "tipos disponivel.\n"
+    "- TIPOS ANTES DA LOGICA: modele o dominio primeiro -- defina TODAS as "
+    "interfaces/structs/classes/tipos antes de implementar qualquer logica de "
+    "negocio. A logica implementa contra tipos ja definidos; nao os redefina "
+    "no meio do caminho.\n"
+    "- CLEAN CODE: nomes descritivos, funcoes pequenas e coesas, sem codigo "
+    "morto, sem numeros magicos, tratamento explicito de erros, e siga os "
+    "padroes ja existentes no codebase.\n"
+    "- DOCUMENTACAO: toda API/tipo publico documentado (docstring/JSDoc/"
+    "typespec) com proposito, parametros e retorno."
+)
+
+
 def build_system_prompt(agent: dict) -> str:
     """
     Gera system prompt a partir dos campos do JSON do agente.
     Aceita override completo via campo 'system_prompt' no JSON.
+    A carta de engenharia do squad (SQUAD_CODING_CHARTER) e sempre anexada.
     """
     if "system_prompt" in agent:
-        return agent["system_prompt"]
+        return agent["system_prompt"] + SQUAD_CODING_CHARTER
 
     nome      = agent.get("nome", "Agent")
     tier      = agent.get("tier", 1)
@@ -166,7 +191,7 @@ def build_system_prompt(agent: dict) -> str:
         "- Follow existing patterns and conventions of the codebase\n\n"
         "You report to the Orchestrator (Claude). "
         "Your output will be reviewed before integration."
-    )
+    ) + SQUAD_CODING_CHARTER
 
 
 # ---------------------------------------------------------------------------
@@ -721,20 +746,25 @@ def store_semantic_cache(agent_name: str, task: str, response: str, project: str
         print(f"  [WARNING] Falha ao gravar no cache semântico local: {e}")
 
 
-def is_task_simple(task: str) -> bool:
-    """Verifica se uma tarefa é trivial (ex: saudações, tarefas muito curtas)."""
-    words = task.strip().split()
+def is_task_simple(task_text: str, agent_tier: int, force_cheap: bool = False) -> bool:
+    """
+    Avalia se a tarefa deve ser roteada para um modelo de custo otimizado.
+    Nunca rebaixa agentes Tier >= 3 a menos que explicitamente forcado (--cheap).
+
+    O criterio antigo era só o tamanho do texto (< 15 palavras), o que rebaixou
+    briefings curtos porem criticos -- incluindo a geracao de blueprint do
+    Sovereign (Tier 4), que alucinou e truncou em gemini-2.5-flash-lite.
+    """
+    if force_cheap:
+        return True
+
+    if agent_tier >= 3:
+        return False
+
+    words = task_text.split()
     if len(words) < 15:
         return True
-    
-    simple_patterns = [
-        r"^\s*ola\b", r"^\s*oi\b", r"^\s*hello\b", r"^\s*hi\b",
-        r"apresente-se", r"quem e voce", r"test", r"teste"
-    ]
-    import re
-    if any(re.search(pat, task, re.IGNORECASE) for pat in simple_patterns):
-        return True
-    
+
     return False
 
 
@@ -986,7 +1016,7 @@ def build_files_context(files: list[str] | None) -> str:
     )
 
 
-def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None, use_rag: bool = False, use_dsl: bool = False) -> None:
+def run_task(agent_name: str, task: str, project: str, files: list[str] | None = None, use_rag: bool = False, use_dsl: bool = False, force_cheap: bool = False) -> None:
     """Modo tarefa: delega briefing especifico a um agente e registra tudo."""
     is_heuristic = agent_name.lower() == "heuristic"
     is_fable     = agent_name.lower() == "fable"
@@ -1037,15 +1067,22 @@ def run_task(agent_name: str, task: str, project: str, files: list[str] | None =
         print("  Nenhuma tarefa nova sem aprovacao explicita do Arquiteto.")
         sys.exit(1)
 
+    # Caminho barato (rebaixar modelo / servir cache) so vale para Tier < 3,
+    # ou com --cheap explicito. Agente critico sempre roda no modelo dele.
+    agent_tier   = int(agent.get("tier", 1) or 1)
+    caminho_barato_ok = force_cheap or agent_tier < 3
+
     # 1. Roteamento Dinâmico (Complexity Routing)
     original_model = model
-    if not is_synthetic and is_task_simple(task) and model in {"google/gemini-2.5-pro", "anthropic/claude-opus-4", "anthropic/claude-sonnet-4-5"}:
+    if not is_synthetic and is_task_simple(task, agent_tier, force_cheap) and model in {"google/gemini-2.5-pro", "anthropic/claude-opus-4", "anthropic/claude-sonnet-4-5"}:
         model = "google/gemini-2.5-flash-lite"
         agent["model"] = model
         print(f"[ROUTING] Tarefa simples detectada. Roteando temporariamente de {original_model} para {model} para economizar custos.")
 
     # 2. Verifica Cache Semântico
-    if not is_heuristic:
+    if not is_heuristic and not caminho_barato_ok:
+        print(f"[CACHE] Ignorado: {nome} e Tier {agent_tier} (>=3). Use --cheap para permitir.")
+    if not is_heuristic and caminho_barato_ok:
         cached_response = check_semantic_cache(nome, task)
         if cached_response:
             print("=" * 60)
@@ -1230,6 +1267,9 @@ def main() -> None:
                         help="Ativa a recuperação de contexto semântico (RAG)")
     parser.add_argument("--dsl", action="store_true",
                         help="Usa Mini-DSL estruturada para economizar tokens de output")
+    parser.add_argument("--cheap", action="store_true",
+                        help="Permite rebaixar o modelo e usar cache semantico mesmo em "
+                             "agente Tier >= 3 (opt-in explicito; sem isso, Tier >=3 e protegido)")
 
     args = parser.parse_args()
 
@@ -1240,12 +1280,12 @@ def main() -> None:
         if not clean_task:
             parser.error("RDF_FABLE exige uma tarefa apos o gatilho. Ex: --task 'RDF_FABLE Refatorar modulo X'")
         files = [f.strip() for f in args.files.split(",")] if args.files else None
-        run_task("fable", clean_task, args.project, files, args.rag, args.dsl)
+        run_task("fable", clean_task, args.project, files, args.rag, args.dsl, args.cheap)
         return
 
     if args.agent and args.task:
         files = [f.strip() for f in args.files.split(",")] if args.files else None
-        run_task(args.agent, args.task, args.project, files, args.rag, args.dsl)
+        run_task(args.agent, args.task, args.project, files, args.rag, args.dsl, args.cheap)
     elif args.agent or args.task:
         parser.error("Use --agent e --task juntos, ou nenhum (modo hello-world).")
     else:
