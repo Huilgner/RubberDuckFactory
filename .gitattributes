@@ -1,0 +1,23 @@
+# =============================================================
+# Fim de linha — governanca agnostica precisa atravessar SO.
+#
+# core.autocrlf=true converteria estes arquivos para CRLF no checkout.
+# Duas consequencias reais:
+#   1. hooks/pre-commit e um script sh — com CRLF, quebra na execucao.
+#   2. os adaptadores gerados por tools/gen_adapters.py sao escritos em LF;
+#      um checkout em CRLF faria o --sync reescrever todos a cada rodada.
+# =============================================================
+
+# Guardrail de git (precisa ser executavel e LF)
+hooks/*            text eol=lf
+
+# Nucleo e adaptadores gerados
+docs/AI_CHARTER.md text eol=lf
+rdf.manifest.json  text eol=lf
+CLAUDE.md          text eol=lf
+AGENTS.md          text eol=lf
+.clinerules        text eol=lf
+.cursorrules       text eol=lf
+
+# Ferramentas Python da plataforma
+*.py               text eol=lf
