@@ -1,0 +1,63 @@
+{
+  "versao": 1,
+  "produto": "RubberDuckFactory",
+  "descricao": "Indice de maquina da governanca do RDF. Fonte unica dos adaptadores de IDE/CLI e dos paths protegidos. Ver docs/blueprints/RubberDuckFactory/BP_DEC02.md.",
+
+  "nucleo": {
+    "charter": "docs/AI_CHARTER.md",
+    "kit": "docs/kit/LEIA-ME.md",
+    "playbooks": "docs/playbooks/",
+    "blueprint": "docs/blueprints/RubberDuckFactory/blueprint_R01.md",
+    "decisoes": [
+      "docs/blueprints/RubberDuckFactory/BP_DEC01.md",
+      "docs/blueprints/RubberDuckFactory/BP_DEC02.md"
+    ],
+    "handover": [
+      "RETOMAR.md",
+      "FACTORY_HANDOFF.md"
+    ]
+  },
+
+  "adaptadores": [
+    {
+      "arquivo": "CLAUDE.md",
+      "ferramenta": "Claude Code",
+      "hooks_pre_execucao": true,
+      "nota": "Guards de runtime em .claude/settings.json -> .claude/hooks/"
+    },
+    {
+      "arquivo": ".clinerules",
+      "ferramenta": "Cline",
+      "hooks_pre_execucao": false
+    },
+    {
+      "arquivo": ".cursorrules",
+      "ferramenta": "Cursor",
+      "hooks_pre_execucao": false
+    },
+    {
+      "arquivo": "AGENTS.md",
+      "ferramenta": "Convencao aberta (Antigravity, openclaw e afins)",
+      "hooks_pre_execucao": false,
+      "nota": "Sem API de hook conhecida: a unica rede e o pre-commit em hooks/"
+    }
+  ],
+
+  "paths_protegidos": [
+    {"path": ".governance/hr_policies.md", "motivo": "edicoes requerem quorum Tier 3 (Shadow)"},
+    {"path": "agents/blacklist/", "motivo": "blacklist requer Shadow + quorum aprovado"},
+    {"path": "docs/blueprints/", "motivo": "fonte de verdade dos projetos; revisao anterior nunca e apagada"},
+    {"path": "rdf.manifest.json", "motivo": "indice da governanca; mudanca aqui muda todos os adaptadores"}
+  ],
+
+  "congelado_desde": "2026-08-25",
+  "congelado": [
+    "duel_runner.py",
+    "gene_crossover.py",
+    "fitness_math.py",
+    "estados evolutivos (Stable/Mutating/Degraded)",
+    "docs/playbooks/handoff_protocol.md (doc-handoff)",
+    "docs/playbooks/ledger_log.md",
+    "escrita em project_ledger/"
+  ]
+}

@@ -55,5 +55,25 @@ sites/
 venv/
 *.egg-info/
 
-# Blueprints (dados de projetos executados)
+# =============================================================
+# PROJETOS E BLUEPRINTS — nunca versionar neste repositório.
+#
+# O RDF é a plataforma; os projetos são dados de cada usuário.
+# Blueprints carregam regra de negócio, nomes de cliente e decisões
+# internas — continuidade privada, não código compartilhável.
+# Caminhos configuráveis em .env (BLUEPRINTS_DIR, PROJECTS_ROOT).
+# =============================================================
+
+# Blueprints dos projetos (o diretório tem git próprio, sem remoto)
 docs/blueprints/
+
+# Projetos-filhos, caso algum seja clonado dentro da fábrica
+# (o normal é viverem fora, em PROJECTS_ROOT)
+projects/
+SIGO_FENIX/
+CastleVote/
+visuau/
+controle_obras/
+SentinelaEdge/
+RifaRegional/
+ColheitaDeLaranjas/

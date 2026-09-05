@@ -1,7 +1,7 @@
 <!-- =========================================================
-     GERADO por tools/gen_adapters.py -- ferramenta: Claude Code
+     GERADO por tools/gen_adapters.py -- ferramenta: Convencao aberta (Antigravity, openclaw e afins)
      Fonte: docs/AI_CHARTER.md (bloco PISO). NAO EDITE ESTE ARQUIVO A MAO.
-     Editou aqui? python tools/gen_adapters.py --promote CLAUDE.md
+     Editou aqui? python tools/gen_adapters.py --promote AGENTS.md
      ========================================================= -->
 
 # Governanca do RubberDuckFactory
@@ -63,4 +63,4 @@ que só existe dentro da IDE, porque some junto com ela.
 | Decisoes vigentes (nao re-litigar) | `docs/blueprints/RubberDuckFactory/BP_DEC01.md`<br>`docs/blueprints/RubberDuckFactory/BP_DEC02.md` |
 | Handover -- use o formato da sua ferramenta | `RETOMAR.md` ou `FACTORY_HANDOFF.md` |
 
-> Esta ferramenta tem hooks de pre-execucao; eles complementam o pre-commit.
+> Esta ferramenta nao tem hooks de pre-execucao conhecidos: a rede e o `hooks/pre-commit`.

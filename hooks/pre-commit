@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# hooks/pre-commit -- guardrail agnostico de ferramenta.
+#
+# Ativado por:  git config core.hooksPath hooks
+#
+# Roda para QUALQUER coisa que commite neste repo: Claude Code, Antigravity,
+# Cline, Cursor, o proprio CTO no terminal. E a unica camada de enforcement que
+# nao depende da ferramenta cooperar (ver docs/AI_CHARTER.md §4).
+#
+# Checks nesta fatia:
+#   1. drift dos adaptadores de IDE contra docs/AI_CHARTER.md
+#
+# Proximos (fatia 2): guards de estado portados de .claude/hooks/
+#   - path protegido (.governance/, agents/blacklist/)
+#   - schema de JSON de agente
+#   - code freeze
+
+set -e
+
+PY=""
+for candidato in python python3 py; do
+    if command -v "$candidato" >/dev/null 2>&1; then
+        PY="$candidato"
+        break
+    fi
+done
+
+if [ -z "$PY" ]; then
+    echo "[pre-commit] Python nao encontrado no PATH — check de governanca PULADO."
+    echo "[pre-commit] Rode 'python tools/gen_adapters.py --check' antes de abrir PR."
+    exit 0
+fi
+
+if ! "$PY" tools/gen_adapters.py --check; then
+    echo ""
+    echo "[pre-commit] Commit bloqueado: a governanca esta fora de sincronia."
+    echo "[pre-commit] Emergencia: git commit --no-verify (e conserte em seguida)."
+    exit 1
+fi
+
+exit 0

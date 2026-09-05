@@ -66,14 +66,15 @@ Services available at:
 - Qdrant UI: http://localhost:6333/dashboard
 - MCP server: http://localhost:8001/mcp
 
-### 3. Open Claude Code in this directory
+### 3. Open your AI IDE (Claude Code, Antigravity, Cursor, Windsurf)
 
 ```bash
 cd C:\RubberDuckFactory
-claude
+# e.g., claude or agy
 ```
 
-Claude Code will auto-load `.mcp.json` and register the `rubberduck-memory` MCP server. The tools `remember`, `recall`, `forget`, and `status` become available in the session.
+RubberDuckFactory is **AI-agnostic**. The core governance rules are located in `docs/AI_CHARTER.md` (which is automatically loaded by `.clinerules`, `.cursorrules`, and `CLAUDE.md`).
+The environment will auto-load `.mcp.json` and register the `rubberduck-memory` MCP server. The tools `remember`, `recall`, `forget`, and `status` become available in the session.
 
 ### 4. Start a session
 
@@ -189,31 +190,23 @@ Dismissed agents are moved to `agents/blacklist/` with a dismissal report. See `
 
 ---
 
-## Skills
+## Universal Playbooks
 
-Skills are invocable workflows in Claude Code (`.claude/skills/`). Project-scoped skills load automatically when the session opens inside `C:\RubberDuckFactory\`; the global `/rdf` skill is available from any directory.
+Playbooks are agnostic workflows located in `docs/playbooks/`. Any AI Orchestrator (Antigravity, Cursor, Claude) reading the `AI_CHARTER.md` will know how to execute these procedures when requested.
 
-### Inside `C:\RubberDuckFactory\` — load automatically
-
-| Skill | When to use | Invoke |
+| Playbook | Quando usar | Arquivo |
 |---|---|---|
-| `agent-briefing` | Delegate any task to a squad agent | `/agent-briefing` |
-| `deploy-committee` | Security audit, stability check, or release | `/deploy-committee` |
-| `doc-handoff` | Generate human-readable maintenance entry after integrating agent output | `/doc-handoff` |
-| `governance-check` | Classify infraction, calculate penalty, promote or blacklist an agent | `/governance-check` |
-| `ledger-log` | Record any event in the ledger (task, failure, hallucination, milestone) | `/ledger-log` |
-
-### Global — available from any directory
-
-| Skill | Modes | When to use |
-|---|---|---|
-| `/rdf` | `status` · `novo <project>` · `modificar <project>` | Session started outside the RDF directory — bootstrap context and start or resume a project |
+| **Agent Briefing** | Delegar tarefas ao squad | `agent_briefing.md` |
+| **Deploy Committee** | Auditoria de segurança, stability check | `deploy_committee.md` |
+| **Handoff Protocol** | Pausar trabalho e gerar status para outro agente | `handoff_protocol.md` |
+| **Governance Check** | Classificar infrações, rebaixamentos e blacklist | `governance_check.md` |
+| **Ledger Log** | Registrar evento no ledger de histórico | `ledger_log.md` |
 
 > **Typical session flow:**
-> `/rdf modificar <project>` → `agent-briefing` → `ledger-log` → `doc-handoff`
+> `Leia o projeto atual` → `Execute playbook agent_briefing` → `Execute playbook ledger_log` → `Execute playbook handoff_protocol`
 >
 > **For deploy:**
-> `agent-briefing` → `deploy-committee` → `ledger-log`
+> `Execute playbook agent_briefing` → `Execute playbook deploy_committee` → `Execute playbook ledger_log`
 
 ---
 
@@ -229,7 +222,7 @@ Every task outcome, promotion, demotion, and dismissal is recorded in `project_l
 
 ### 3. Cost-aware Delegation
 
-Claude (orchestrator) is billed per token and handles complex reasoning. Agents are cheaper models suited for repetitive, high-volume tasks. The delegation matrix in `CLAUDE.md` encodes the boundary: "generate boilerplate → delegate; review output → orchestrate."
+Claude (or any Orchestrator AI) is billed per token and handles complex reasoning. Agents are cheaper models suited for repetitive, high-volume tasks. The delegation matrix in `docs/AI_CHARTER.md` encodes the boundary: "generate boilerplate → delegate; review output → orchestrate."
 
 ### 4. Evolutionary Fitness (ADR-003 — in evaluation)
 
@@ -320,15 +313,13 @@ Model selection rules (what to avoid) are in `.governance/model_caution_list.md`
 
 ```
 RubberDuckFactory/
+├── docs/
+│   ├── AI_CHARTER.md               # [MASTER] AI-Agnostic System Prompt & Governance Rules
+│   ├── playbooks/                  # Universal Markdown workflows (deploy, briefing, etc.)
+│   └── ADR-00*.md                  # Architecture Decision Records
 ├── .claude/
 │   ├── settings.json               # Hook configuration (guardrails)
-│   ├── hooks/                      # PreToolUse / PostToolUse / Stop / SessionStart scripts
-│   └── skills/
-│       ├── agent-briefing/         # Skill: how to select and brief an agent
-│       ├── deploy-committee/       # Skill: 4-phase quality gate workflow
-│       ├── doc-handoff/            # Skill: human maintenance entry after agent task
-│       ├── governance-check/       # Skill: infraction classification and promotions
-│       └── ledger-log/             # Skill: how to record events in history.json
+│   └── hooks/                      # PreToolUse / PostToolUse / Stop / SessionStart scripts
 ├── .github/workflows/ci.yml        # CI: testes, schemas do pool e leak-guard de PRs
 ├── .governance/
 │   ├── hr_policies.md              # Tier system, points, infractions, dismissal rules
@@ -351,8 +342,10 @@ RubberDuckFactory/
 │   └── hooks_audit.log             # Hook audit trail (gerado em runtime)
 ├── tests/                          # Suíte pytest (ledger, fitness, budget, gate, pool)
 ├── tools/check_schemas.py          # Validação de CI (pool + fitness)
-├── .mcp.json                       # MCP server registration for Claude Code
-├── CLAUDE.md                       # Orchestration rules and delegation matrix
+├── .mcp.json                       # MCP server registration for Claude Code/Antigravity/Cursor
+├── CLAUDE.md                       # Pointer to docs/AI_CHARTER.md
+├── .clinerules                     # Pointer to docs/AI_CHARTER.md
+├── .cursorrules                    # Pointer to docs/AI_CHARTER.md
 ├── docker-compose.yaml             # Full stack definition
 ├── fitness_math.py                 # Wilson lower bound + janela deslizante (ADR-003)
 ├── ledger_io.py                    # Escrita segura no ledger (lock + JSONL + visão compat)
