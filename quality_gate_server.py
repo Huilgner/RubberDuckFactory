@@ -53,6 +53,40 @@ def _read_last_verdict() -> dict:
         return {}
 
 
+def _autoriza_destravamento(verdict_ts: str, frozen_since: str) -> bool:
+    """
+    Diz se um veredito GO emitido em `verdict_ts` autoriza destravar o freeze
+    iniciado em `frozen_since`.
+
+    EMPATE AUTORIZA — e a semantica correta, nao uma tolerancia. Este era o bug:
+    o guard usava `verdict_ts <= frozen_since` e tratava "mesmo instante" como
+    "veredito anterior". O relogio do Windows tem granularidade de ~15,6 ms,
+    entao `deploy_freeze("set")` e `deploy_verdict()` caem no mesmo tique com
+    frequencia (medido: 3 falhas em 8 execucoes) e gravam timestamps IDENTICOS.
+    Um veredito no mesmo instante foi necessariamente emitido depois de o freeze
+    ter retornado — recusa-lo negava um GO legitimo e empurrava o operador para
+    o `override`, que exige justificativa auditada no ledger. So veredito
+    estritamente ANTERIOR ao freeze e recusado.
+
+    Compara DATETIME e nao string. Para o formato que este servidor grava hoje
+    (sempre UTC, sempre sufixo "+00:00") a ordem lexicografica ja coincide com a
+    cronologica — inclusive na fronteira com/sem fracao, porque '+' (0x2B) <
+    '.' (0x2E) coloca o timestamp sem fracao, que e o mais antigo do segundo,
+    na frente. Ou seja: nao ha bug de string hoje. A comparacao por datetime e
+    defesa contra variacao de formato — sufixo "Z" no lugar de "+00:00", outro
+    offset, timestamp ingenuo — que quebraria a comparacao textual em silencio.
+
+    Timestamp ausente ou corrompido nega: um freeze so destrava com prova
+    valida (ADR-004 fase 1).
+    """
+    if not verdict_ts or not frozen_since:
+        return False
+    try:
+        return datetime.fromisoformat(verdict_ts) >= datetime.fromisoformat(frozen_since)
+    except ValueError:
+        return False
+
+
 @mcp.tool()
 def deploy_freeze(action: str, reason: str = "") -> dict:
     """
@@ -79,7 +113,9 @@ def deploy_freeze(action: str, reason: str = "") -> dict:
             return {"frozen": False, "action": "unset", "note": "freeze já estava inativo"}
         frozen_since = FREEZE_FLAG.read_text(encoding="utf-8").strip()
         verdict = _read_last_verdict()
-        if verdict.get("verdict") != "GO" or verdict.get("timestamp", "") <= frozen_since:
+        if verdict.get("verdict") != "GO" or not _autoriza_destravamento(
+            str(verdict.get("timestamp", "")), frozen_since
+        ):
             return {
                 "frozen": True,
                 "action": "unset",
