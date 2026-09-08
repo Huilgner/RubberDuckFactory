@@ -15,7 +15,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Instalar dependências (mínimas para a suíte)
-        run: pip install httpx python-dotenv pytest mcp
+        # mcp<2: o 2.x renomeou FastMCP para MCPServer e quebra o import em
+        # server.py e quality_gate_server.py. Mesmo teto do pyproject.toml.
+        run: pip install httpx python-dotenv pytest "mcp<2"
       - name: Sintaxe de todos os .py
         run: |
           python -m compileall -q ledger_io.py cost_tracker.py fitness_math.py \

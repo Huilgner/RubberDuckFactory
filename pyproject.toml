@@ -10,7 +10,11 @@ dependencies = [
   "httpx>=0.27",
   "python-dotenv>=1.0",
   "qdrant-client>=1.18.0",
-  "mcp>=1.27.1",
+  # Teto obrigatorio: no mcp 2.x o FastMCP virou MCPServer e o import
+  # `from mcp.server.fastmcp import FastMCP` deixa de existir. server.py e
+  # quality_gate_server.py ainda usam a API v1. Migracao pendente antes de
+  # levantar este teto.
+  "mcp>=1.27.1,<2",
 ]
 
 [dependency-groups]
